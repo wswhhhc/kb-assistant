@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/d/java/Mysqls/mysql-8.4.5-winx64/bin/mysql *)"
+    ]
+  }
+}

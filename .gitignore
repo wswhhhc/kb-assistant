@@ -1,0 +1,38 @@
+# Java
+backend-java/target/
+*.class
+*.jar
+*.war
+*.log
+
+# Python
+backend-python/__pycache__/
+backend-python/*/__pycache__/
+backend-python/*/*/__pycache__/
+backend-python/.venv/
+backend-python/venv/
+*.pyc
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local
+*.env.example
+
+# Uploaded files
+data/files/
+
+# Maven wrapper
+.mvn/

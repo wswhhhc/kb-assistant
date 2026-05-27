@@ -1,0 +1,90 @@
+version: "3.8"
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: kb-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: knowledge_base_assistant
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+  redis:
+    image: redis:7-alpine
+    container_name: kb-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: kb-qdrant
+    restart: always
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant-data:/qdrant/storage
+
+  fastapi-service:
+    build:
+      context: ../backend-python
+      dockerfile: Dockerfile
+    container_name: kb-fastapi
+    restart: always
+    depends_on:
+      - mysql
+      - qdrant
+    environment:
+      - SILICONFLOW_API_KEY=${SILICONFLOW_API_KEY}
+      - QDRANT_HOST=qdrant
+      - MYSQL_HOST=mysql
+      - MYSQL_PASSWORD=${MYSQL_ROOT_PASSWORD:-root}
+    ports:
+      - "8000:8000"
+    volumes:
+      - shared-files:/app/data/files
+
+  springboot-service:
+    build:
+      context: ../backend-java
+      dockerfile: Dockerfile
+    container_name: kb-springboot
+    restart: always
+    depends_on:
+      - mysql
+      - redis
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-root}
+      - JWT_SECRET=${JWT_SECRET:-YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY3ODkwYWJjZGVmZ2hpamtsbW5vcA==}
+    ports:
+      - "8080:8080"
+    volumes:
+      - shared-files:/app/data/files
+
+  frontend:
+    image: nginx:alpine
+    container_name: kb-frontend
+    restart: always
+    depends_on:
+      - springboot-service
+    ports:
+      - "80:80"
+    volumes:
+      - ../frontend/dist:/usr/share/nginx/html
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+
+volumes:
+  mysql-data:
+  redis-data:
+  qdrant-data:
+  shared-files:
