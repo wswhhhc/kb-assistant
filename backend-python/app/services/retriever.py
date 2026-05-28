@@ -2,10 +2,9 @@
 
 import math
 from typing import Optional
-import pymysql
 from qdrant_client import QdrantClient
 from qdrant_client.models import Filter, FieldCondition, MatchValue
-from app.config.settings import settings
+from app.config.settings import settings, mysql_pool
 
 
 class RetrievedChunk:
@@ -37,15 +36,8 @@ class Retriever:
         self.top_k = settings.TOP_K
 
     @staticmethod
-    def _get_mysql_conn():
-        return pymysql.connect(
-            host=settings.MYSQL_HOST,
-            port=settings.MYSQL_PORT,
-            user=settings.MYSQL_USER,
-            password=settings.MYSQL_PASSWORD,
-            database=settings.MYSQL_DATABASE,
-            charset="utf8mb4"
-        )
+    def _get_conn():
+        return mysql_pool.connection()
 
     def _fill_chunk_content(self, chunks: list[RetrievedChunk]) -> None:
         if not chunks:
@@ -63,7 +55,7 @@ class Retriever:
         for document_id, chunk_index in keys:
             params.extend([document_id, chunk_index])
 
-        conn = self._get_mysql_conn()
+        conn = self._get_conn()
         try:
             with conn.cursor() as cursor:
                 cursor.execute(sql, params)
@@ -118,7 +110,7 @@ class Retriever:
                        knowledge_base_id: int) -> list[RetrievedChunk]:
         """关键词检索：使用 MySQL FULLTEXT 搜索 document_chunk.content"""
         top_k = settings.KEYWORD_TOP_K * 2
-        conn = self._get_mysql_conn()
+        conn = self._get_conn()
         try:
             with conn.cursor() as cursor:
                 sql = """

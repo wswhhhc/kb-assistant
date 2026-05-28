@@ -2,10 +2,9 @@
 
 import os
 from typing import Optional
-import pymysql
 from qdrant_client import QdrantClient
 from qdrant_client.models import VectorParams, Distance, PointStruct
-from app.config.settings import settings
+from app.config.settings import settings, mysql_pool
 from app.services.parser import PdfParser, DocxParser, TxtParser, MdParser
 from app.services.chunker import Chunker
 from app.services.embedder import Embedder
@@ -49,20 +48,13 @@ class DocumentProcessor:
             raise ValueError(f"不支持的文件类型: {file_type}")
         return parser
 
-    def _get_mysql_conn(self):
-        return pymysql.connect(
-            host=settings.MYSQL_HOST,
-            port=settings.MYSQL_PORT,
-            user=settings.MYSQL_USER,
-            password=settings.MYSQL_PASSWORD,
-            database=settings.MYSQL_DATABASE,
-            charset="utf8mb4"
-        )
+    def _get_conn(self):
+        return mysql_pool.connection()
 
     def _update_status(self, doc_id: int, status: str,
                        chunk_count: int = 0,
                        error_message: Optional[str] = None):
-        conn = self._get_mysql_conn()
+        conn = self._get_conn()
         try:
             with conn.cursor() as cursor:
                 if status == "READY":
@@ -138,7 +130,7 @@ class DocumentProcessor:
             )
 
             # 写入 MySQL chunk 元数据
-            conn = self._get_mysql_conn()
+            conn = self._get_conn()
             try:
                 with conn.cursor() as cursor:
                     for i, chunk in enumerate(chunks):

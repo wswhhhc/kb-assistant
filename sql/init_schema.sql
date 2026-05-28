@@ -197,22 +197,6 @@ CREATE TABLE `failed_question` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='失败问题表';
 
 -- ============================================================
--- 10. 热门问题统计表（V2 预留）
--- ============================================================
-DROP TABLE IF EXISTS `hot_question_stat`;
-CREATE TABLE `hot_question_stat` (
-    `id`                BIGINT        NOT NULL AUTO_INCREMENT  COMMENT '主键 ID',
-    `knowledge_base_id` BIGINT        NOT NULL                 COMMENT '知识库 ID',
-    `question`          VARCHAR(1000) NOT NULL                 COMMENT '问题内容',
-    `ask_count`         INT           NOT NULL DEFAULT 0       COMMENT '提问次数',
-    `last_asked_at`     DATETIME      DEFAULT NULL             COMMENT '最近提问时间',
-    `updated_at`        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    PRIMARY KEY (`id`),
-    KEY `idx_hot_kb_id` (`knowledge_base_id`),
-    KEY `idx_hot_ask_count` (`ask_count`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='热门问题统计表（V2）';
-
--- ============================================================
 -- 初始化数据：创建默认管理员账号
 -- ============================================================
 INSERT INTO `sys_user` (`username`, `password_hash`, `real_name`, `role`, `status`)

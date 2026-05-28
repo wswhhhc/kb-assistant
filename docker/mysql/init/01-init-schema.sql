@@ -39,6 +39,7 @@ CREATE TABLE `knowledge_base` (
     `name`          VARCHAR(100)  NOT NULL                 COMMENT '知识库名称',
     `description`   VARCHAR(500)  DEFAULT NULL             COMMENT '知识库描述',
     `owner_user_id` BIGINT        NOT NULL                 COMMENT '创建人 ID',
+    `scope`         VARCHAR(10)   NOT NULL DEFAULT 'PRIVATE' COMMENT '可见范围：PUBLIC-公开(全员可见), PRIVATE-私有(仅管理员和创建者可见)',
     `status`        VARCHAR(20)   NOT NULL DEFAULT 'ACTIVE' COMMENT '状态：ACTIVE / DISABLED',
     `is_deleted`    TINYINT(1)    NOT NULL DEFAULT 0       COMMENT '逻辑删除标记：0 未删除 1 已删除',
     `deleted_at`    DATETIME      DEFAULT NULL             COMMENT '删除时间',
@@ -112,8 +113,8 @@ CREATE TABLE `document_chunk` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_chunk_doc_index` (`document_id`, `chunk_index`),
     KEY `idx_chunk_doc_id` (`document_id`),
-    KEY `idx_chunk_kb_id` (`knowledge_base_id`)
-    -- V1 暂不加 page_no 和 vector_id 索引，后续按需补充
+    KEY `idx_chunk_kb_id` (`knowledge_base_id`),
+    FULLTEXT KEY `ft_chunk_content` (`content`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文档切片表';
 
 -- ============================================================
@@ -183,6 +184,10 @@ CREATE TABLE `failed_question` (
     `question`          VARCHAR(1000) NOT NULL                 COMMENT '失败问题内容',
     `failure_type`      VARCHAR(30)   NOT NULL                 COMMENT '失败类型：NO_HIT / LOW_QUALITY / INSUFFICIENT_CITATION / MODEL_ERROR',
     `remark`            VARCHAR(1000) DEFAULT NULL             COMMENT '失败说明',
+    `status`            VARCHAR(20)   NOT NULL DEFAULT 'PENDING' COMMENT '状态：PENDING-待处理, REVIEWED-已查看, RESOLVED-已解决, DISMISSED-已忽略',
+    `resolution`        VARCHAR(500)  DEFAULT NULL             COMMENT '处理说明',
+    `resolved_at`       DATETIME      DEFAULT NULL             COMMENT '处理时间',
+    `resolved_by`       BIGINT        DEFAULT NULL             COMMENT '处理人 ID',
     `created_at`        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     PRIMARY KEY (`id`),
     KEY `idx_failed_kb_id` (`knowledge_base_id`),
@@ -190,22 +195,6 @@ CREATE TABLE `failed_question` (
     KEY `idx_failed_type` (`failure_type`),
     KEY `idx_failed_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='失败问题表';
-
--- ============================================================
--- 10. 热门问题统计表（V2 预留）
--- ============================================================
-DROP TABLE IF EXISTS `hot_question_stat`;
-CREATE TABLE `hot_question_stat` (
-    `id`                BIGINT        NOT NULL AUTO_INCREMENT  COMMENT '主键 ID',
-    `knowledge_base_id` BIGINT        NOT NULL                 COMMENT '知识库 ID',
-    `question`          VARCHAR(1000) NOT NULL                 COMMENT '问题内容',
-    `ask_count`         INT           NOT NULL DEFAULT 0       COMMENT '提问次数',
-    `last_asked_at`     DATETIME      DEFAULT NULL             COMMENT '最近提问时间',
-    `updated_at`        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    PRIMARY KEY (`id`),
-    KEY `idx_hot_kb_id` (`knowledge_base_id`),
-    KEY `idx_hot_ask_count` (`ask_count`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='热门问题统计表（V2）';
 
 -- ============================================================
 -- 初始化数据：创建默认管理员账号

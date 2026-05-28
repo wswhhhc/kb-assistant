@@ -1,4 +1,6 @@
 from pydantic_settings import BaseSettings
+from dbutils.pooled_db import PooledDB
+import pymysql
 
 
 class Settings(BaseSettings):
@@ -23,6 +25,8 @@ class Settings(BaseSettings):
     MYSQL_USER: str = "root"
     MYSQL_PASSWORD: str = "root"
     MYSQL_DATABASE: str = "knowledge_base_assistant"
+    MYSQL_POOL_SIZE: int = 5      # 连接池大小
+    MYSQL_POOL_MAX: int = 10      # 连接池最大连接数
 
     # 文档处理
     CHUNK_SIZE: int = 500
@@ -33,15 +37,15 @@ class Settings(BaseSettings):
 
     # Hybrid Search 配置
     ENABLE_HYBRID_SEARCH: bool = True
-    KEYWORD_TOP_K: int = 5           # 关键词检索取回数量
-    RRF_K: int = 60                   # RRF 融合常数
-    KEYWORD_WEIGHT: float = 0.4      # 关键词检索权重
-    VECTOR_WEIGHT: float = 0.6       # 向量检索权重
+    KEYWORD_TOP_K: int = 5
+    RRF_K: int = 60
+    KEYWORD_WEIGHT: float = 0.4
+    VECTOR_WEIGHT: float = 0.6
 
     # Rerank 配置
     ENABLE_RERANK: bool = True
     RERANK_MODEL: str = "BAAI/bge-reranker-v2-m3"
-    RERANK_TOP_K: int = 5            # 重排后保留数量
+    RERANK_TOP_K: int = 5
 
     # 共享文件卷路径
     FILE_UPLOAD_DIR: str = "./data/files"
@@ -52,3 +56,18 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# 全局 MySQL 连接池
+mysql_pool = PooledDB(
+    creator=pymysql,
+    maxconnections=settings.MYSQL_POOL_MAX,
+    mincached=settings.MYSQL_POOL_SIZE,
+    blocking=True,
+    host=settings.MYSQL_HOST,
+    port=settings.MYSQL_PORT,
+    user=settings.MYSQL_USER,
+    password=settings.MYSQL_PASSWORD,
+    database=settings.MYSQL_DATABASE,
+    charset="utf8mb4",
+    cursorclass=pymysql.cursors.Cursor
+)

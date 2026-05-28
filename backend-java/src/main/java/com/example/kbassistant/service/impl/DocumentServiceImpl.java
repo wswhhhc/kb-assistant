@@ -25,8 +25,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import lombok.extern.slf4j.Slf4j;
+
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class DocumentServiceImpl implements DocumentService {
 
     private final DocumentMapper documentMapper;
@@ -76,6 +79,17 @@ public class DocumentServiceImpl implements DocumentService {
         doc.setParseStatus("UPLOADED");
         doc.setCreatedBy(userId);
         documentMapper.insert(doc);
+
+        // 上传成功后自动触发文档处理
+        final Long docId = doc.getId();
+        new Thread(() -> {
+            try {
+                log.info("自动处理文档: {}", docId);
+                processDocument(docId, userId, isAdmin);
+            } catch (Exception e) {
+                log.warn("文档自动处理失败: {} - {}", docId, e.getMessage());
+            }
+        }).start();
 
         return doc;
     }

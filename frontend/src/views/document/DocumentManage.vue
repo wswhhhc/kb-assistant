@@ -56,16 +56,16 @@
         <el-table-column prop="createdAt" label="上传时间" width="170">
           <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="170" fixed="right">
+        <el-table-column label="操作" width="100" fixed="right">
           <template #default="{ row }">
             <el-button
               v-if="canManage"
               type="primary" link size="small"
-              :disabled="row.parseStatus !== 'UPLOADED' && row.parseStatus !== 'FAILED'"
+              :disabled="row.parseStatus !== 'FAILED'"
               :loading="processingId === row.id"
               @click="handleProcess(row.id)"
             >
-              处理
+              重试
             </el-button>
             <el-popconfirm v-if="canManage" title="确定删除该文档？" @confirm="handleDelete(row.id)">
               <template #reference>
@@ -90,7 +90,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { listDocuments, uploadDocument, deleteDocument, processDocument } from '@/api/document'
 import { getKnowledgeBase } from '@/api/knowledgeBase'
@@ -105,6 +105,8 @@ const kbId = Number(route.params.kbId)
 
 const kbOwnerId = ref(null)
 const loading = ref(false)
+const processingId = ref(null)
+let pollTimer = null
 
 const canManage = computed(() => {
   return authStore.isAdmin || authStore.userInfo?.id === kbOwnerId.value
@@ -113,7 +115,12 @@ const tableData = ref([])
 const total = ref(0)
 const pageNum = ref(1)
 const pageSize = ref(10)
-const processingId = ref(null)
+
+const hasProcessingDoc = computed(() => {
+  return tableData.value.some(row =>
+    ['UPLOADED', 'PARSING', 'CHUNKING', 'EMBEDDING'].includes(row.parseStatus)
+  )
+})
 
 const uploadUrl = computed(() => `/api/knowledge-bases/${kbId}/documents`)
 const uploadHeaders = computed(() => ({
@@ -148,7 +155,7 @@ function beforeUpload(file) {
 }
 
 function handleUploadSuccess() {
-  ElMessage.success('上传成功')
+  ElMessage.success('上传成功，正在处理文档...')
   fetchList()
 }
 
@@ -195,13 +202,32 @@ async function fetchKb() {
     const res = await getKnowledgeBase(kbId)
     kbOwnerId.value = res.data.ownerUserId
   } catch {
-    // 知识库获取失败时，默认不允许操作
     kbOwnerId.value = null
+  }
+}
+
+function startPolling() {
+  if (pollTimer) return
+  pollTimer = setInterval(() => {
+    if (hasProcessingDoc.value) {
+      fetchList()
+    } else {
+      stopPolling()
+    }
+  }, 3000)
+}
+
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
   }
 }
 
 onMounted(() => {
   fetchKb()
   fetchList()
+  startPolling()
 })
+onUnmounted(() => stopPolling())
 </script>
