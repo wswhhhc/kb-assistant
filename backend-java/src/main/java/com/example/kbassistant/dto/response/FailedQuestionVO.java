@@ -1,17 +1,15 @@
-package com.example.kbassistant.entity;
+package com.example.kbassistant.dto.response;
 
-import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
 import java.time.LocalDateTime;
 
 @Data
-@TableName("failed_question")
-public class FailedQuestion {
-    @TableId(type = IdType.AUTO)
+public class FailedQuestionVO {
     private Long id;
     private Long userId;
     private Long knowledgeBaseId;
+    private String kbName;
     private Long sessionId;
     private String question;
     private String failureType;
@@ -20,6 +18,5 @@ public class FailedQuestion {
     private String resolution;
     private LocalDateTime resolvedAt;
     private Long resolvedBy;
-    @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 }

@@ -12,8 +12,12 @@ export function getSessionMessages(sessionId) {
   return request.get(`/chat/sessions/${sessionId}/messages`)
 }
 
-export function createSession(data) {
-  return request.post('/chat/sessions', data)
+export function getSession(sessionId) {
+  return request.get(`/chat/sessions/${sessionId}`)
+}
+
+export function createSession(params) {
+  return request.post('/chat/sessions', null, { params })
 }
 
 export function deleteSession(id) {

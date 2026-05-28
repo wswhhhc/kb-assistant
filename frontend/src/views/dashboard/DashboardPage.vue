@@ -1,6 +1,10 @@
 <template>
   <div>
-    <h3>首页仪表盘</h3>
+    <div style="margin-bottom: 20px;">
+      <h3 style="margin: 0 0 8px 0;">{{ pageTitle }}</h3>
+      <div style="color: #909399; font-size: 14px;">{{ pageDescription }}</div>
+    </div>
+
     <el-row :gutter="20" style="margin-top: 20px;">
       <el-col :span="6" v-for="item in stats" :key="item.label">
         <el-card shadow="hover">
@@ -15,29 +19,61 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { getStatistics } from '@/api/dashboard'
+import { useAuthStore } from '@/stores/auth'
 
-const stats = ref([
-  { label: '用户数', value: 0 },
-  { label: '知识库数', value: 0 },
-  { label: '文档数', value: 0 },
-  { label: '问答次数', value: 0 }
-])
+const authStore = useAuthStore()
+const dashboardData = ref(null)
+
+const adminStatsTemplate = [
+  { label: '用户数', field: 'userCount' },
+  { label: '知识库', field: 'knowledgeBaseCount' },
+  { label: '文档总数', field: 'documentCount' },
+  { label: '已就绪文档', field: 'readyDocumentCount' },
+  { label: '问答次数', field: 'chatCount' },
+  { label: '反馈数量', field: 'feedbackCount' },
+  { label: '失败问题', field: 'failedQuestionCount' }
+]
+
+const userStatsTemplate = [
+  { label: '我的知识库', field: 'knowledgeBaseCount' },
+  { label: '我上传的文档', field: 'documentCount' },
+  { label: '已就绪文档', field: 'readyDocumentCount' },
+  { label: '我的问答次数', field: 'chatCount' },
+  { label: '我的反馈数', field: 'feedbackCount' },
+  { label: '我的失败问题', field: 'failedQuestionCount' }
+]
+
+const isAdminView = computed(() => {
+  if (dashboardData.value?.adminView !== undefined) {
+    return !!dashboardData.value.adminView
+  }
+  return !!authStore.isAdmin
+})
+
+const pageTitle = computed(() => (isAdminView.value ? '系统仪表盘' : '个人工作台'))
+const pageDescription = computed(() => (
+  isAdminView.value
+    ? '查看平台整体使用情况、知识库规模与问答质量统计。'
+    : '查看你自己的知识库使用情况、上传进度和问答记录。'
+))
+
+const stats = computed(() => {
+  const template = isAdminView.value ? adminStatsTemplate : userStatsTemplate
+  const data = dashboardData.value || {}
+  return template.map(item => ({
+    label: item.label,
+    value: data[item.field] ?? '-'
+  }))
+})
 
 onMounted(async () => {
   try {
     const res = await getStatistics()
-    if (res.data) {
-      stats.value = [
-        { label: '用户数', value: res.data.userCount },
-        { label: '知识库数', value: res.data.knowledgeBaseCount },
-        { label: '文档数', value: res.data.documentCount },
-        { label: '问答次数', value: res.data.chatCount }
-      ]
-    }
+    dashboardData.value = res.data || {}
   } catch {
-    // use default zeros
+    dashboardData.value = {}
   }
 })
 </script>

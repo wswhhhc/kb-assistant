@@ -4,67 +4,72 @@
 
 ## 功能特性
 
-- **用户与权限管理** — 支持管理员和普通用户角色，JWT 认证
-- **知识库管理** — 创建/编辑/删除知识库，成员访问控制
-- **文档管理** — 上传 PDF / DOCX / MD / TXT 文档，自动解析与入库
-- **智能问答** — 基于知识库检索 + DeepSeek 大模型生成答案，支持引用溯源
-- **会话历史** — 多轮对话记录与历史查看
-- **反馈闭环** — 答案点赞/点踩、失败问题自动记录、基础统计面板
+- **用户与权限管理** — 管理员/普通用户角色，JWT 认证，知识库成员访问控制
+- **知识库管理** — 创建/编辑/删除知识库，成员权限管理
+- **文档管理** — 上传 PDF / DOCX / MD / TXT 文档，自动解析切片与向量化入库
+- **智能问答** — 基于知识库检索 + 大模型生成答案，支持**流式输出**和引用溯源
+- **引用溯源** — 每条回答附带来源文档和内容片段，可点击展开查看全文
+- **反馈闭环** — 答案点赞/点踩、失败问题自动记录、数据统计面板
+- **会话历史** — 多轮对话记录保存与历史查看
 
 ## 系统架构
 
 ```
-用户 → Vue 3 前端 → Spring Boot (REST API) ─→ MySQL / Redis
-                 ↘→ FastAPI (AI 服务) ─→ Qdrant / SiliconFlow API
+用户 → Vue 3 前端 (port 3000) → Spring Boot (REST API port 8080) ─→ MySQL / Redis
+                                ↘→ FastAPI (AI 服务 port 8000) ─→ Qdrant / SiliconFlow
 ```
 
-**文档入库链路**：上传 → 解析 → 切片 → Embedding → 写入 Qdrant + MySQL
+**文档入库链路**：上传 → 解析（PDF/DOCX/TXT/MD）→ 切片（500字+50 overlap）→ Embedding（BGE-M3）→ 写入 Qdrant + MySQL
 
-**问答链路**：提问 → 向量化 → Qdrant 召回 → 拼接 Prompt → DeepSeek 生成 → 引用返回
+**问答链路**：提问 → 向量化 → Qdrant 召回（knowledge_base_id 过滤）→ 拼接 Prompt → LLM 生成 → 引用返回（流式 / 非流式）
 
 ## 技术栈
 
 | 层 | 技术 | 说明 |
 |---|------|------|
-| 前端 | Vue 3 + Element Plus + Pinia + vue-router | Element Plus 组件库 |
-| 业务后端 | Spring Boot 3.4 + MyBatis-Plus + JWT | ORM 用 MyBatis-Plus，认证用 JWT |
-| AI 服务 | FastAPI + PyMuPDF + python-docx + qdrant-client | 独立的 AI 处理链路 |
+| 前端 | Vue 3 + Element Plus + Pinia + vue-router + Vite 6 | 组件库 Element Plus |
+| 业务后端 | Spring Boot 3.4 + MyBatis-Plus 3.5 + JWT (jjwt 0.12) | ORM、认证分离 |
+| AI 服务 | FastAPI + PyMuPDF + python-docx + qdrant-client + httpx | 独立的 AI 链路服务 |
 | 数据库 | MySQL 8.x | 业务数据与结构化元数据 |
-| 缓存 | Redis | 登录态、热点数据 |
+| 缓存 | Redis | 登录态、会话管理 |
 | 向量库 | Qdrant | chunk 向量存储与相似度检索 |
-| 模型平台 | SiliconFlow API | Embedding（BGE-M3）+ 生成（DeepSeek） |
+| 模型平台 | SiliconFlow API | Embedding（BGE-M3 1024维）+ 生成（Qwen2.5-7B） |
 
 ## 项目结构
 
 ```
 knowledge-base-assistant/
-├── frontend/                  # Vue 3 前端项目
+├── frontend/                  # Vue 3 前端
 │   ├── src/
-│   │   ├── api/               # 接口封装（axios）
-│   │   ├── views/             # 页面（登录、仪表盘、知识库、问答...）
+│   │   ├── api/               # axios 接口封装
+│   │   ├── views/             # 页面（登录、仪表盘、知识库、文档、问答、反馈...）
 │   │   ├── router/            # 路由 + 守卫
 │   │   ├── stores/            # Pinia 状态管理
-│   │   └── components/        # 通用组件
-│   └── ...
+│   │   ├── components/        # 通用组件（AppLayout, StatusTag, CitationPanel）
+│   │   └── utils/             # 请求拦截器、工具函数
+│   └── vite.config.js         # Vite 配置（含 API 代理）
 ├── backend-java/              # Spring Boot 业务服务
-│   ├── src/main/java/.../
-│   │   ├── controller/        # REST 接口层
-│   │   ├── service/           # 业务逻辑层
-│   │   ├── mapper/            # MyBatis-Plus Mapper
-│   │   ├── entity/            # 数据实体
-│   │   ├── security/          # JWT 安全相关
-│   │   └── client/            # FastAPI HTTP 客户端
-│   └── ...
+│   └── src/main/java/com/example/kbassistant/
+│       ├── controller/        # REST 接口层
+│       ├── service/           # 业务逻辑层
+│       ├── mapper/            # MyBatis-Plus Mapper
+│       ├── entity/            # 数据实体
+│       ├── dto/               # 请求/响应 DTO
+│       ├── config/            # 配置类（安全、跨域、Jackson、MyBatis-Plus）
+│       ├── security/          # JWT 过滤器 + Token 提供者
+│       ├── client/            # FastAPI HTTP 客户端
+│       └── common/            # 通用工具（Result, PageResult, 异常处理）
 ├── backend-python/            # FastAPI AI 服务
-│   ├── app/
-│   │   ├── routers/           # 接口路由
-│   │   ├── services/          # 解析、切片、向量化、问答
-│   │   └── config/            # 模型配置
-│   └── ...
-├── sql/                       # 建表脚本
+│   └── app/
+│       ├── routers/           # 接口路由（文档处理、问答）
+│       ├── services/          # 文档解析、切片、向量化、检索、问答生成
+│       │   └── parser/        # PDF / DOCX / TXT / MD 解析器
+│       ├── schemas/           # Pydantic 模型
+│       └── config/            # 配置（环境变量 + .env）
+├── sql/                       # 建表脚本（含初始化数据）
 ├── docker/                    # Docker Compose 编排
 ├── docs/                      # 设计文档
-└── data/files/                # 上传文件存储（共享卷）
+└── data/files/                # 上传文件存储
 ```
 
 ## 快速开始
@@ -76,7 +81,7 @@ knowledge-base-assistant/
 - Node.js 18+
 - MySQL 8.x
 - Redis
-- Qdrant
+- Qdrant（[Docker](https://hub.docker.com/r/qdrant/qdrant)）
 - SiliconFlow API Key（[注册](https://siliconflow.cn)）
 
 ### 1. 初始化数据库
@@ -85,30 +90,34 @@ knowledge-base-assistant/
 mysql -u root -p < sql/init_schema.sql
 ```
 
-### 2. 启动后端服务
+### 2. 配置环境变量
 
 ```bash
-# Spring Boot 业务服务
-cd backend-java
-mvn spring-boot:run
-
-# FastAPI AI 服务（另开终端）
-cd backend-python
-pip install -r requirements.txt
-python -m app.main
+# Python 端
+cp backend-python/.env.example backend-python/.env
+# 编辑 .env，填入 SILICONFLOW_API_KEY 和 MySQL 密码
 ```
 
-### 3. 启动前端
+### 3. 启动服务
 
 ```bash
-cd frontend
-npm install
-npm run dev
+# 方式一：一键启动（前端 + FastAPI）
+start.bat
+
+# 方式二：分别启动
+# Spring Boot（IntelliJ 或命令行）
+cd backend-java && mvn spring-boot:run -Dspring-boot.run.profiles=dev
+
+# FastAPI AI 服务
+cd backend-python && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# 前端
+cd frontend && npm install && npm run dev
 ```
 
 ### 4. 访问
 
-浏览器打开 `http://localhost:5173`
+浏览器打开 `http://localhost:3000`
 
 ## 测试账号
 
@@ -118,17 +127,25 @@ npm run dev
 
 ## 开发状态
 
-当前完成：第一阶段（项目初始化）+ 第二阶段（基础业务模块）
+当前完成：第一 ~ 五阶段（项目初始化 + 基础业务 + 文档入库 + RAG 问答 + 反馈闭环）
 
 - [x] 项目骨架搭建
 - [x] 数据库建表 + 初始化数据
 - [x] 用户登录 / JWT 认证
-- [x] 知识库 CRUD
-- [x] 成员权限管理
-- [x] 文档上传与管理
-- [x] AI 服务基础通信
-- [ ] 文档解析与切片
-- [ ] Embedding 向量化
-- [ ] RAG 问答链路
-- [ ] 反馈与统计面板
+- [x] 知识库 CRUD + 成员权限管理
+- [x] 文档上传与多格式解析（PDF/DOCX/TXT/MD）
+- [x] 切片 + Embedding 向量化（BGE-M3 1024维）
+- [x] Qdrant 向量存储与检索
+- [x] RAG 问答链路（含流式输出）
+- [x] 引用溯源（可展开查看原文）
+- [x] 多轮会话历史
+- [x] 答案点赞/点踩反馈
+- [x] 失败问题自动记录
+- [x] 数据统计面板
 - [ ] Docker Compose 一键部署
+
+## 知识库文档
+
+- `docs/系统设计文档.md` — 架构设计、模块划分、核心流程
+- `docs/数据库设计文档.md` — 表结构、字段定义、索引、Qdrant/Redis 设计
+- `docs/项目开发计划文档.md` — 开发计划、阶段划分、技术选型

@@ -28,4 +28,10 @@ public class FeedbackController {
                           @RequestParam(defaultValue = "10") int pageSize) {
         return Result.success(feedbackService.page(pageNum, pageSize));
     }
+
+    @GetMapping("/my")
+    public Result<?> myFeedback(@RequestParam String messageIds,
+                                @AuthenticationPrincipal JwtUserDetails userDetails) {
+        return Result.success(feedbackService.getMyFeedbackMap(messageIds, userDetails.getUserId()));
+    }
 }

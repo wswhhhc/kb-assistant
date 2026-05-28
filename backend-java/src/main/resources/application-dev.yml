@@ -20,11 +20,13 @@ ai:
       timeout: 120000
     chat:
       ask-url: ${ai.fastapi.base-url}/internal/chat/ask
+      stream-url: ${ai.fastapi.base-url}/internal/chat/ask-stream
       timeout: 60000
+      stream-timeout: 180000
 
 jwt:
   secret: YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY3ODkwYWJjZGVmZ2hpamtsbW5vcA==
   expiration: 86400000
 
 file:
-  upload-dir: ./data/files
+  upload-dir: D:/AI Demo/kb-assistant/data/files

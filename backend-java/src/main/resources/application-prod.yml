@@ -19,7 +19,9 @@ ai:
       timeout: 120000
     chat:
       ask-url: ${ai.fastapi.base-url}/internal/chat/ask
+      stream-url: ${ai.fastapi.base-url}/internal/chat/ask-stream
       timeout: 60000
+      stream-timeout: 180000
 
 jwt:
   secret: ${JWT_SECRET}

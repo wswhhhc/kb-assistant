@@ -27,6 +27,10 @@
           <el-icon><ChatDotRound /></el-icon>
           <span>智能问答</span>
         </el-menu-item>
+        <el-menu-item index="/session-history">
+          <el-icon><ChatDotRound /></el-icon>
+          <span>会话历史</span>
+        </el-menu-item>
         <el-menu-item v-if="authStore.isAdmin" index="/feedback">
           <el-icon><Star /></el-icon>
           <span>反馈记录</span>
@@ -60,6 +64,7 @@
 </template>
 
 <script setup>
+import { onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
@@ -77,6 +82,18 @@ function handleCommand(command) {
     router.push('/login')
   }
 }
+
+// 刷新页面后重新获取用户信息
+onMounted(async () => {
+  if (authStore.token && !authStore.userInfo) {
+    try {
+      await authStore.getUserInfo()
+    } catch {
+      authStore.logout()
+      router.push('/login')
+    }
+  }
+})
 </script>
 
 <style scoped>

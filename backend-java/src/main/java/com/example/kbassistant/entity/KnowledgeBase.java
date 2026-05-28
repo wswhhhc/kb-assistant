@@ -14,6 +14,7 @@ public class KnowledgeBase {
     private String description;
     private Long ownerUserId;
     private String status;
+    private String scope;
     @TableLogic
     private Integer isDeleted;
     private LocalDateTime deletedAt;

@@ -5,7 +5,7 @@ export function login(data) {
 }
 
 export function getUserInfo() {
-  return request.get('/user/me')
+  return request.get('/auth/me')
 }
 
 export function logout() {

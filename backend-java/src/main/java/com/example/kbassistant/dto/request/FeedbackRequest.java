@@ -10,5 +10,6 @@ public class FeedbackRequest {
     private Long messageId;
     @NotBlank(message = "反馈类型不能为空")
     private String feedbackType;
+    private String reasonType;
     private String reason;
 }

@@ -9,6 +9,8 @@ import com.example.kbassistant.service.ChatMessageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class ChatMessageServiceImpl implements ChatMessageService {
@@ -24,7 +26,40 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     }
 
     @Override
-    public void save(ChatMessage message) {
+    public ChatMessage save(ChatMessage message) {
         messageMapper.insert(message);
+        return message;
+    }
+
+    @Override
+    public ChatMessage getById(Long id) {
+        return messageMapper.selectById(id);
+    }
+
+    @Override
+    public ChatMessage findPreviousUserMessage(Long sessionId, Long beforeMessageId) {
+        LambdaQueryWrapper<ChatMessage> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(ChatMessage::getSessionId, sessionId)
+                .eq(ChatMessage::getRole, "USER")
+                .lt(ChatMessage::getId, beforeMessageId)
+                .orderByDesc(ChatMessage::getId)
+                .last("LIMIT 1");
+        return messageMapper.selectOne(wrapper);
+    }
+
+    @Override
+    public List<ChatMessage> findRecentBySessionId(Long sessionId, int limit) {
+        LambdaQueryWrapper<ChatMessage> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(ChatMessage::getSessionId, sessionId)
+                .orderByDesc(ChatMessage::getCreatedAt)
+                .last("LIMIT " + limit);
+        return messageMapper.selectList(wrapper);
+    }
+
+    @Override
+    public void deleteBySessionId(Long sessionId) {
+        LambdaQueryWrapper<ChatMessage> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(ChatMessage::getSessionId, sessionId);
+        messageMapper.delete(wrapper);
     }
 }

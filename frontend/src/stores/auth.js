@@ -18,7 +18,7 @@ export const useAuthStore = defineStore('auth', {
       this.userInfo = res.data
     },
     async getUserInfo() {
-      const res = await request.get('/user/me')
+      const res = await request.get('/auth/me')
       this.userInfo = res.data
     },
     logout() {

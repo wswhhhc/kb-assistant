@@ -25,26 +25,33 @@ public class KnowledgeBaseController {
     }
 
     @GetMapping("/{id}")
-    public Result<?> get(@PathVariable Long id) {
-        return Result.success(knowledgeBaseService.getById(id));
+    public Result<?> get(@PathVariable Long id,
+                         @AuthenticationPrincipal JwtUserDetails userDetails) {
+        boolean isAdmin = "ADMIN".equals(userDetails.getRole());
+        return Result.success(knowledgeBaseService.getById(id, userDetails.getUserId(), isAdmin));
     }
 
     @PostMapping
     public Result<?> create(@Valid @RequestBody KnowledgeBaseCreateRequest request,
                             @AuthenticationPrincipal JwtUserDetails userDetails) {
-        return Result.success(knowledgeBaseService.create(request, userDetails.getUserId()));
+        boolean isAdmin = "ADMIN".equals(userDetails.getRole());
+        return Result.success(knowledgeBaseService.create(request, userDetails.getUserId(), isAdmin));
     }
 
     @PutMapping("/{id}")
     public Result<Void> update(@PathVariable Long id,
-                               @Valid @RequestBody KnowledgeBaseCreateRequest request) {
-        knowledgeBaseService.update(id, request);
+                               @Valid @RequestBody KnowledgeBaseCreateRequest request,
+                               @AuthenticationPrincipal JwtUserDetails userDetails) {
+        boolean isAdmin = "ADMIN".equals(userDetails.getRole());
+        knowledgeBaseService.update(id, request, userDetails.getUserId(), isAdmin);
         return Result.success();
     }
 
     @DeleteMapping("/{id}")
-    public Result<Void> delete(@PathVariable Long id) {
-        knowledgeBaseService.delete(id);
+    public Result<Void> delete(@PathVariable Long id,
+                               @AuthenticationPrincipal JwtUserDetails userDetails) {
+        boolean isAdmin = "ADMIN".equals(userDetails.getRole());
+        knowledgeBaseService.delete(id, userDetails.getUserId(), isAdmin);
         return Result.success();
     }
 }

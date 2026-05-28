@@ -3,10 +3,17 @@ from typing import Optional
 
 
 class Citation(BaseModel):
+    documentId: int
     fileName: str
     pageNo: Optional[int] = None
     chunkIndex: int
     contentPreview: str
+    content: Optional[str] = ""
+
+
+class HistoryMessage(BaseModel):
+    role: str  # USER / AI
+    content: str
 
 
 class AskRequest(BaseModel):
@@ -14,6 +21,7 @@ class AskRequest(BaseModel):
     knowledgeBaseId: int
     sessionId: Optional[int] = None
     question: str
+    history: list[HistoryMessage] = []  # 多轮会话历史
 
 
 class AskResponse(BaseModel):

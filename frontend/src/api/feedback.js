@@ -7,3 +7,9 @@ export function submitFeedback(data) {
 export function listFeedback(params) {
   return request.get('/feedback', { params })
 }
+
+export function getMyFeedbackMap(messageIds) {
+  return request.get('/feedback/my', {
+    params: { messageIds: messageIds.join(',') }
+  })
+}

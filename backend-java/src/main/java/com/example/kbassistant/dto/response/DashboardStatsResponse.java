@@ -4,6 +4,7 @@ import lombok.Data;
 
 @Data
 public class DashboardStatsResponse {
+    private boolean adminView;
     private long userCount;
     private long knowledgeBaseCount;
     private long documentCount;

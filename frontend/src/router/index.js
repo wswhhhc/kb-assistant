@@ -37,9 +37,19 @@ const routes = [
         component: () => import('@/views/document/DocumentManage.vue')
       },
       {
+        path: 'documents/:kbId/:documentId',
+        name: 'DocumentDetail',
+        component: () => import('@/views/document/DocumentDetail.vue')
+      },
+      {
         path: 'chat',
         name: 'Chat',
         component: () => import('@/views/chat/ChatPage.vue')
+      },
+      {
+        path: 'session-history',
+        name: 'SessionHistory',
+        component: () => import('@/views/chat/SessionHistory.vue')
       },
       {
         path: 'feedback',

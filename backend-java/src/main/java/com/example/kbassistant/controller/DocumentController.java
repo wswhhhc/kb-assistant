@@ -19,19 +19,38 @@ public class DocumentController {
     public Result<?> upload(@PathVariable Long kbId,
                             @RequestParam("file") MultipartFile file,
                             @AuthenticationPrincipal JwtUserDetails userDetails) {
-        return Result.success(documentService.upload(kbId, file, userDetails.getUserId()));
+        boolean isAdmin = "ADMIN".equals(userDetails.getRole());
+        return Result.success(documentService.upload(kbId, file, userDetails.getUserId(), isAdmin));
     }
 
     @GetMapping("/knowledge-bases/{kbId}/documents")
     public Result<?> list(@PathVariable Long kbId,
                           @RequestParam(defaultValue = "1") int pageNum,
-                          @RequestParam(defaultValue = "10") int pageSize) {
-        return Result.success(documentService.pageByKnowledgeBaseId(kbId, pageNum, pageSize));
+                          @RequestParam(defaultValue = "10") int pageSize,
+                          @AuthenticationPrincipal JwtUserDetails userDetails) {
+        boolean isAdmin = "ADMIN".equals(userDetails.getRole());
+        return Result.success(documentService.pageByKnowledgeBaseId(kbId, pageNum, pageSize, userDetails.getUserId(), isAdmin));
+    }
+
+    @GetMapping("/documents/{id}")
+    public Result<?> detail(@PathVariable Long id,
+                            @AuthenticationPrincipal JwtUserDetails userDetails) {
+        boolean isAdmin = "ADMIN".equals(userDetails.getRole());
+        return Result.success(documentService.getDocumentDetail(id, userDetails.getUserId(), isAdmin));
     }
 
     @DeleteMapping("/documents/{id}")
-    public Result<Void> delete(@PathVariable Long id) {
-        documentService.delete(id);
+    public Result<Void> delete(@PathVariable Long id,
+                               @AuthenticationPrincipal JwtUserDetails userDetails) {
+        boolean isAdmin = "ADMIN".equals(userDetails.getRole());
+        documentService.delete(id, userDetails.getUserId(), isAdmin);
         return Result.success();
+    }
+
+    @PostMapping("/documents/{id}/process")
+    public Result<?> process(@PathVariable Long id,
+                             @AuthenticationPrincipal JwtUserDetails userDetails) {
+        boolean isAdmin = "ADMIN".equals(userDetails.getRole());
+        return Result.success(documentService.processDocument(id, userDetails.getUserId(), isAdmin));
     }
 }
