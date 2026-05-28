@@ -558,7 +558,17 @@ async function handleSend() {
 
     aiMsg.content = fullAnswer
     aiMsg.citations = citations
+    // 保存思考过程（switchSession 会重新加载消息列表，但后端不存 thinkingContent）
+    const savedThinking = aiMsg.thinkingContent
     await switchSession(currentSessionId.value)
+    // 重新挂载思考过程到最新一条 AI 消息
+    if (savedThinking) {
+      const lastAiMsg = [...messages.value].reverse().find(m => m.role === 'AI')
+      if (lastAiMsg) {
+        lastAiMsg.thinkingContent = savedThinking
+        lastAiMsg._showThinking = false  // 默认收起
+      }
+    }
     await fetchSessions()
 
   } catch {
