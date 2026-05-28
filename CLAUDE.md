@@ -64,11 +64,17 @@ cd backend-python && pip install -r requirements.txt
 | 全局异常 | `common/GlobalExceptionHandler.java` | `BusinessException` 返回 HTTP 200 + code=500，前端 axios 拦截器走 success 分支检查 code |
 | 安全 | `security/JwtAuthenticationFilter.java` | `OncePerRequestFilter`，从 `Authorization: Bearer <token>` 提取 |
 | 安全 | `security/JwtTokenProvider.java` | jjwt 0.12，密钥 Base64 解码后 `hmacShaKeyFor()` |
-| 客户端 | `client/AiServiceClient.java` | 用 `HttpURLConnection` 调 FastAPI，文档处理/问答三个方法高度重复。`askQuestionStream` 返回 InputStream 需调用方关闭 |
+| 安全 | `security/JwtUserDetails.java` | 含 `isAdmin()` 方法，替代 `"ADMIN".equals(...)` 散落判断 |
+| 常量 | `constants/UserRoles.java`, `constants/MessageRoles.java` | 角色/消息角色字符串常量 |
+| 枚举 | `enums/DocumentStatus.java`, `enums/FailureType.java` | 文档状态/失败类型枚举 |
+| 客户端 | `client/AiServiceClient.java` | `HttpURLConnection` 调 FastAPI，已抽取 `openPostConnection`/`postJsonForMap`/`postJsonForStream` 三个私有方法 |
+| 应用服务 | `service/ChatAskService.java` | 聊天公用逻辑：`prepareContext`、`saveAiMessage`、`recordFailedQuestion` |
+| 异步处理 | `service/DocumentProcessingService.java` | `@Async("documentTaskExecutor")` 异步文档处理（ThreadPoolTaskExecutor 2/4） |
 | 配置 | `config/SecurityConfig.java` | 放行 `/api/auth/**`, `/internal/**`，其余需认证。CSRF disable，CORS 单独配置 |
 | 配置 | `config/CorsConfig.java` | `addAllowedOriginPattern("*")` + `allowCredentials(true)` |
 | 配置 | `config/RedisConfig.java` | `RedisTemplate<String, Object>`，Jackson 序列化，Long→String 防 JS 精度丢失 |
 | 配置 | `config/MyMetaObjectHandler.java` | `createdAt`/`updatedAt` 自动填充 |
+| 配置 | `config/AsyncConfig.java` | `@EnableAsync` + ThreadPoolTaskExecutor 配置 |
 | 实体 | `entity/*.java` | `@Data` + `@TableName` + `@TableId`，软删字段 `is_deleted` + `@TableLogic`，时间字段 `@TableField(fill = FieldFill.INSERT_UPDATE)` |
 
 ### Python (backend-python/app/)
@@ -79,22 +85,34 @@ cd backend-python && pip install -r requirements.txt
 | `services/retriever.py` | 混合检索：Qdrant 向量检索 + MySQL FULLTEXT 关键词检索 + RRF 融合 |
 | `services/reranker.py` | 调 SiliconFlow Rerank API 二次排序，失败时回退原始排序 |
 | `services/qa_generator.py` | Prompt 工程：查询改写、Prompt 拼接、流式/非流式生成 |
-| `services/qa_service.py` | 问答编排：查询改写→多查询变体→检索→合并→重排→生成 |
+| `services/qa_service.py` | 问答编排：`prepare_answer` 统一同步/流式准备流程，`ask` 调用生成 |
 | `services/chunker.py` | 固定长度切片 500 字 + 50 overlap，字符级 |
-| `services/embedder.py` | BGE-M3 Embedding，httpx.AsyncClient 异步调用 |
+| `services/embedder.py` | BGE-M3 Embedding，底层复用 SiliconFlowClient |
+| `services/siliconflow_client.py` | SiliconFlow API 统一客户端：embed/embed_batch/chat/chat_stream/rerank |
+| `services/citation.py` | 引用组装 |
 | `services/parser/base.py` | 解析器抽象基类 + `ParseResult` |
 | `services/parser/pdf_parser.py` | PyMuPDF 提取纯文本 |
 | `services/parser/docx_parser.py` | python-docx 提取文本 |
-| `routers/chat.py` | 注意：查询改写只应用于流式问答路径，同步路径没有改写 |
+| `routers/chat.py` | 同步/流式问答路由，均通过 `QAService` 实例调用，无独立 `QAGenerator` |
 
 ### 前端 (frontend/src/)
 
 | 路径 | 说明 |
 |------|------|
 | `utils/request.js` | axios 实例，baseURL `/api`，自动注入 token，401 跳转 `/login` |
+| `utils/markdown.js` | `renderMarkdown`/`formatTime`/`buildSessionTitle` 工具函数 |
+| `utils/streamRequest.js` | SSE fetch 封装，自动 token 注入 + 401 处理 |
+| `composables/useChatStream.js` | 流式问答状态管理 + `handleSend` |
+| `composables/useChatSessions.js` | 会话 CRUD + 知识库选择 + 反馈弹窗状态 |
+| `composables/useCitationNavigation.js` | 引用弹窗 + `window.__goToCitation` 生命周期管理 |
+| `components/chat/ChatSessionSidebar.vue` | 会话侧边栏（列表 + KB 选择） |
+| `components/chat/ChatMessageList.vue` | 消息列表 + 自动滚动 + 引用导航事件 |
+| `components/chat/ChatMessageBubble.vue` | 单条消息气泡（思考过程 + 反馈 + 引用） |
+| `components/chat/CitationDialog.vue` | 引用详情弹窗 |
+| `components/chat/FeedbackDialog.vue` | 反馈原因弹窗 |
 | `stores/auth.js` | 登录/登出/用户信息，`getUserInfo()` 在 `AppLayout.vue` 的 `onMounted` 中调用 |
 | `router/index.js` | 路由守卫检测 token，**无角色守卫**（菜单用 `v-if="authStore.isAdmin"` 但直接访问 URL 不会拦截） |
-| `views/chat/ChatPage.vue` | 最复杂页面（~750行），SSE 手动解析，Markdown 用正则简单渲染 |
+| `views/chat/ChatPage.vue` | 主聊天页（~184行），编排上述 composable 和组件 |
 
 ### 配置与部署
 
@@ -131,6 +149,18 @@ views/XxxPage.vue → router/index.js 添加路由 → api/xxx.js 添加接口
 - DTO 用 `@NotBlank` / `@NotNull` 做参数校验，请求用 `@Valid`
 - MyBatis-Plus Mapper 继承 `BaseMapper<T>` 获得基础 CRUD
 
+### 新增前端组件规范
+
+- 页面级功能拆分优先：composable 管理状态，component 负责渲染
+- 通用 composable 放在 `composables/`，页面级组件放在 `components/xxx/`
+- 纯工具函数放在 `utils/`，不依赖 Vue API
+
+### 代码常量规范
+
+- 角色字符串、消息角色用 `constants/` 常量类
+- 文档状态、失败类型用 `enums/` 枚举，通过 `.name()` 转字符串
+- 管理员判断用 `userDetails.isAdmin()`，不用 `"ADMIN".equals(...)`
+
 ### 文档状态机
 
 文档 parse_status 流转通过 `document_processor.py` 控制：
@@ -138,22 +168,24 @@ views/XxxPage.vue → router/index.js 添加路由 → api/xxx.js 添加接口
 UPLOADED → PARSING → CHUNKING → EMBEDDING → READY
                                             → FAILED（任一阶段抛异常）
 ```
+上传后由 `DocumentProcessingService.processAsync()` 异步触发（`@Async` + ThreadPoolTaskExecutor）。
 
 ### RAG 问答数据流
 
 1. 前端 `POST /api/chat/ask` 或 `/chat/ask-stream`
-2. Spring Boot `ChatController` → `ChatService`（加载最近 50 条历史消息）
+2. Spring Boot `ChatController` → `ChatAskService.prepareContext`（会话创建 + 历史 + 用户消息保存）
 3. `AiServiceClient` 调 FastAPI `/internal/chat/ask` 或 `/ask-stream`
-4. FastAPI `qa_service.py`：查询改写 → 向量化（BGE-M3）→ Qdrant 检索（按 kb_id 过滤）+ MySQL 全文检索 → RRF 融合 → Rerank → 拼接 Prompt → DeepSeek 生成
-5. 答案返回给 Spring Boot，保存 `chat_message`（含 `citation_json`）
+4. FastAPI `qa_service.py`：`prepare_answer`（查询改写 → 向量化 → 检索 → Rerank → Prompt）→ 生成
+5. 答案返回给 Spring Boot，`ChatAskService.saveAiMessage` 保存 `chat_message`（含 `citation_json`）
 
 ### V1 设计边界
 
 - PDF 解析只保证纯文本型文档，不处理表格/多栏/扫描件
 - 切片 500 字 + 50 overlap 固定长度
-- 文档处理同步（2 分钟超时），不引入消息队列
+- 文档处理异步（`@Async` 线程池 2/4），不引入消息队列
 - Embedding 维度 1024（BGE-M3）
 - 密码明文传输（仅 HTTPS 保护）
+- 前端流式问答用 fetch + 手动 SSE 解析（不依赖 axios）
 
 ## 常见问题
 

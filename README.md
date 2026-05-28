@@ -96,9 +96,9 @@ flowchart TB
 
 ```text
 kb-assistant/
-├── frontend/                # Vue 3 前端
-├── backend-java/            # Spring Boot 业务服务
-├── backend-python/          # FastAPI AI 服务
+├── frontend/                # Vue 3 前端（含 composables/ + components/chat/）
+├── backend-java/            # Spring Boot 业务服务（含 constants/ + enums/）
+├── backend-python/          # FastAPI AI 服务（含 siliconflow_client.py）
 ├── sql/                     # 建表脚本与初始化数据
 ├── docker/                  # Docker Compose 部署配置
 ├── docs/                    # 设计文档
