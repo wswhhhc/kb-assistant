@@ -161,8 +161,13 @@ class QAGenerator:
             data = response.json()
             return data["choices"][0]["message"]["content"]
 
-    async def generate_stream(self, prompt: str) -> AsyncGenerator[str, None]:
-        """调用模型生成回答（流式），逐 chunk 产出文本"""
+    async def generate_stream(self, prompt: str) -> AsyncGenerator[tuple[str, str], None]:
+        """调用模型生成回答（流式），逐 chunk 产出 (type, content) 二元组
+
+        type 取值：
+          - "thinking" — 模型推理过程（reasoning_content）
+          - "answer"   — 最终回答内容（content）
+        """
         if not self.api_key:
             raise ValueError("SILICONFLOW_API_KEY 未配置")
 
@@ -191,8 +196,11 @@ class QAGenerator:
                         try:
                             chunk = jsonlib.loads(data_str)
                             delta = chunk.get("choices", [{}])[0].get("delta", {})
+                            reasoning = delta.get("reasoning_content", "")
                             content = delta.get("content", "")
+                            if reasoning:
+                                yield ("thinking", reasoning)
                             if content:
-                                yield content
+                                yield ("answer", content)
                         except jsonlib.JSONDecodeError:
                             continue

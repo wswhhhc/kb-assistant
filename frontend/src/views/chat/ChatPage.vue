@@ -35,6 +35,16 @@
             </div>
             <div v-else class="message-row ai-row">
               <div class="message-bubble ai-bubble">
+                <div v-if="msg.thinkingContent" class="thinking-section">
+                  <div class="thinking-header" @click="msg._showThinking = !msg._showThinking">
+                    <span class="thinking-icon">✦</span>
+                    <span>{{ msg._showThinking ? '收起思考过程' : '展开思考过程' }}</span>
+                    <span class="thinking-toggle">{{ msg._showThinking ? '▲' : '▼' }}</span>
+                  </div>
+                  <div v-show="msg._showThinking" class="thinking-body">
+                    {{ msg.thinkingContent }}
+                  </div>
+                </div>
                 <div class="ai-content" v-html="renderMarkdown(msg.content, msg.citations, idx)"></div>
                 <div v-if="msg.id" class="feedback-actions">
                   <el-button
@@ -417,6 +427,8 @@ async function handleSend() {
   messages.value.push({
     role: 'AI',
     content: '',
+    thinkingContent: '',
+    _showThinking: true,
     citations: [],
     feedbackType: null,
     _showCitations: false,
@@ -469,8 +481,16 @@ async function handleSend() {
         if (currentEvent === 'citations') {
           citations = Array.isArray(data) ? data : []
           aiMsg.citations = citations
+        } else if (currentEvent === 'thinking') {
+          if (data.text !== undefined) {
+            aiMsg.thinkingContent += data.text
+          }
         } else if (currentEvent === 'answer') {
           if (data.text !== undefined) {
+            // 首个 answer 到达时自动折叠思考区域
+            if (!fullAnswer) {
+              aiMsg._showThinking = false
+            }
             fullAnswer += data.text
             aiMsg.content = fullAnswer
           }
@@ -738,6 +758,41 @@ onMounted(async () => {
   0% { background: #ecf5ff; }
   50% { background: #b3d8ff; }
   100% { background: #ecf5ff; }
+}
+.thinking-section {
+  background: #f0f2f5;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  border-left: 3px solid #409eff;
+}
+.thinking-header {
+  padding: 6px 12px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  color: #606266;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.thinking-header:hover {
+  color: #409eff;
+}
+.thinking-icon {
+  font-size: 12px;
+  color: #409eff;
+}
+.thinking-toggle {
+  margin-left: auto;
+  font-size: 10px;
+}
+.thinking-body {
+  padding: 0 12px 10px;
+  font-size: 13px;
+  color: #909399;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 .input-area {
   padding: 16px 20px;

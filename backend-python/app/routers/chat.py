@@ -74,9 +74,12 @@ async def ask_question_stream(request: AskRequest):
         success = True
 
         try:
-            async for text in qa_generator.generate_stream(prompt):
-                full_answer += text
-                yield f"event: answer\ndata: {json.dumps({'text': text})}\n\n"
+            async for msg_type, text in qa_generator.generate_stream(prompt):
+                if msg_type == "thinking":
+                    yield f"event: thinking\ndata: {json.dumps({'text': text})}\n\n"
+                elif msg_type == "answer":
+                    full_answer += text
+                    yield f"event: answer\ndata: {json.dumps({'text': text})}\n\n"
         except Exception as e:
             logger.error("流式生成失败", exc_info=True)
             success = False
