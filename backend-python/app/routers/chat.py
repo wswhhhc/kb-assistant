@@ -4,13 +4,10 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from app.schemas.chat import AskRequest, AskResponse
 from app.services.qa_service import QAService
-from app.services.qa_generator import QAGenerator
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 qa_service = QAService()
-qa_generator = QAGenerator()
-
 
 
 @router.post("/ask", response_model=AskResponse)
@@ -44,37 +41,29 @@ async def ask_question_stream(request: AskRequest):
     history = [{"role": m.role, "content": m.content} for m in request.history]
 
     async def event_stream():
-        # 查询改写：对省略式追问补充上下文
-        retrieval_question = request.question
-        if history:
-            rewritten = await qa_generator.rewrite_query(request.question, history)
-            if rewritten and rewritten != request.question:
-                retrieval_question = rewritten
-                logger.info("查询改写: %s -> %s", request.question[:30], rewritten[:30])
-
-        result = await qa_service.retrieve_context(
-            question=retrieval_question,
-            knowledge_base_id=request.knowledgeBaseId
+        prepared = await qa_service.prepare_answer(
+            question=request.question,
+            knowledge_base_id=request.knowledgeBaseId,
+            history=history,
         )
 
-        if not result["success"]:
-            yield f"event: done\ndata: {json.dumps({'answer': result['answer'], 'citations': [], 'retrievalCount': 0, 'modelName': '', 'success': False})}\n\n"
+        if not prepared["success"]:
+            yield f"event: done\ndata: {json.dumps({'answer': prepared['answer'], 'citations': [], 'retrievalCount': 0, 'modelName': '', 'success': False})}\n\n"
             return
 
-        citations = result["citations"]
+        citations = prepared["citations"]
         yield f"event: citations\ndata: {json.dumps(citations)}\n\n"
 
-        if not result["chunks"]:
-            yield f"event: done\ndata: {json.dumps({'answer': result['answer'], 'citations': citations, 'retrievalCount': result['retrievalCount'], 'modelName': result['modelName'], 'success': True})}\n\n"
+        if not prepared["prompt"]:
+            yield f"event: done\ndata: {json.dumps({'answer': prepared['answer'], 'citations': citations, 'retrievalCount': prepared['retrievalCount'], 'modelName': prepared['modelName'], 'success': True})}\n\n"
             return
 
-        contexts = [chunk.content for chunk in result["chunks"]]
-        prompt = qa_generator.build_context_prompt(request.question, contexts, history)
+        prompt = prepared["prompt"]
         full_answer = ""
         success = True
 
         try:
-            async for msg_type, text in qa_generator.generate_stream(prompt):
+            async for msg_type, text in qa_service.generator.generate_stream(prompt):
                 if msg_type == "thinking":
                     yield f"event: thinking\ndata: {json.dumps({'text': text})}\n\n"
                 elif msg_type == "answer":
@@ -86,7 +75,7 @@ async def ask_question_stream(request: AskRequest):
             if not full_answer:
                 full_answer = "抱歉，答案生成失败，请稍后重试。"
 
-        yield f"event: done\ndata: {json.dumps({'answer': full_answer, 'citations': citations, 'retrievalCount': result['retrievalCount'], 'modelName': result['modelName'], 'success': success})}\n\n"
+        yield f"event: done\ndata: {json.dumps({'answer': full_answer, 'citations': citations, 'retrievalCount': prepared['retrievalCount'], 'modelName': prepared['modelName'], 'success': success})}\n\n"
 
     return StreamingResponse(
         event_stream(),

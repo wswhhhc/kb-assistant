@@ -19,15 +19,7 @@ public class UserController {
 
     @GetMapping("/me")
     public Result<UserInfoResponse> me(@AuthenticationPrincipal JwtUserDetails userDetails) {
-        var user = userService.getById(userDetails.getUserId());
-        UserInfoResponse resp = new UserInfoResponse();
-        resp.setId(user.getId());
-        resp.setUsername(user.getUsername());
-        resp.setRealName(user.getRealName());
-        resp.setEmail(user.getEmail());
-        resp.setRole(user.getRole());
-        resp.setStatus(user.getStatus());
-        return Result.success(resp);
+        return Result.success(userService.getUserInfo(userDetails.getUserId()));
     }
 
     @GetMapping

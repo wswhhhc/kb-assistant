@@ -26,7 +26,7 @@ public class MemberController {
     public Result<Void> add(@PathVariable Long kbId,
                             @Valid @RequestBody MemberAddRequest request,
                             @AuthenticationPrincipal JwtUserDetails userDetails) {
-        if (!"ADMIN".equals(userDetails.getRole())) {
+        if (!userDetails.isAdmin()) {
             throw new BusinessException("无权限，仅管理员可管理成员");
         }
         memberService.addMember(kbId, request.getUserId());
@@ -37,7 +37,7 @@ public class MemberController {
     public Result<Void> remove(@PathVariable Long kbId,
                                @PathVariable Long userId,
                                @AuthenticationPrincipal JwtUserDetails userDetails) {
-        if (!"ADMIN".equals(userDetails.getRole())) {
+        if (!userDetails.isAdmin()) {
             throw new BusinessException("无权限，仅管理员可管理成员");
         }
         memberService.removeMember(kbId, userId);

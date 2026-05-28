@@ -41,44 +41,21 @@ public class AiServiceClient {
     }
 
     public Map processDocument(Map<String, Object> request) {
-        try {
-            byte[] json = objectMapper.writeValueAsBytes(request);
-            HttpURLConnection conn = (HttpURLConnection) URI.create(documentProcessUrl).toURL().openConnection(Proxy.NO_PROXY);
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "application/json");
-            conn.setConnectTimeout(10000);
-            conn.setReadTimeout((int) documentTimeout);
-            conn.setDoOutput(true);
-            conn.connect();
-            try (OutputStream os = conn.getOutputStream()) {
-                os.write(json);
-                os.flush();
-            }
-            int status = conn.getResponseCode();
-            if (status == 200) {
-                return objectMapper.readValue(conn.getInputStream(), Map.class);
-            }
-            String error = new String(conn.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
-            throw new RuntimeException("AI 服务返回 " + status + ": " + error);
-        } catch (Exception e) {
-            throw new RuntimeException("文档处理失败: " + e.getMessage(), e);
-        }
+        return postJsonForMap(documentProcessUrl, documentTimeout, request, "文档处理失败: ");
     }
 
     public Map askQuestion(Map<String, Object> request) {
+        return postJsonForMap(chatAskUrl, chatTimeout, request, "问答请求失败: ");
+    }
+
+    public BufferedReader askQuestionStream(Map<String, Object> request) {
+        return postJsonForStream(chatStreamUrl, chatStreamTimeout, request, "流式问答请求失败: ");
+    }
+
+    private Map postJsonForMap(String url, long readTimeout, Object request, String errorPrefix) {
         try {
-            byte[] json = objectMapper.writeValueAsBytes(request);
-            HttpURLConnection conn = (HttpURLConnection) URI.create(chatAskUrl).toURL().openConnection(Proxy.NO_PROXY);
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "application/json");
-            conn.setConnectTimeout(10000);
-            conn.setReadTimeout((int) chatTimeout);
-            conn.setDoOutput(true);
-            conn.connect();
-            try (OutputStream os = conn.getOutputStream()) {
-                os.write(json);
-                os.flush();
-            }
+            HttpURLConnection conn = openPostConnection(url, (int) readTimeout, "application/json");
+            writeBody(conn, request);
             int status = conn.getResponseCode();
             if (status == 200) {
                 return objectMapper.readValue(conn.getInputStream(), Map.class);
@@ -86,25 +63,14 @@ public class AiServiceClient {
             String error = new String(conn.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
             throw new RuntimeException("AI 服务返回 " + status + ": " + error);
         } catch (Exception e) {
-            throw new RuntimeException("问答请求失败: " + e.getMessage(), e);
+            throw new RuntimeException(errorPrefix + e.getMessage(), e);
         }
     }
 
-    public BufferedReader askQuestionStream(Map<String, Object> request) {
+    private BufferedReader postJsonForStream(String url, long readTimeout, Object request, String errorPrefix) {
         try {
-            byte[] json = objectMapper.writeValueAsBytes(request);
-            HttpURLConnection conn = (HttpURLConnection) URI.create(chatStreamUrl).toURL().openConnection(Proxy.NO_PROXY);
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "application/json");
-            conn.setRequestProperty("Accept", "text/event-stream");
-            conn.setConnectTimeout(10000);
-            conn.setReadTimeout((int) chatStreamTimeout);
-            conn.setDoOutput(true);
-            conn.connect();
-            try (OutputStream os = conn.getOutputStream()) {
-                os.write(json);
-                os.flush();
-            }
+            HttpURLConnection conn = openPostConnection(url, (int) readTimeout, "text/event-stream");
+            writeBody(conn, request);
             int status = conn.getResponseCode();
             if (status == 200) {
                 return new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
@@ -112,7 +78,27 @@ public class AiServiceClient {
             String error = new String(conn.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
             throw new RuntimeException("AI 服务返回 " + status + ": " + error);
         } catch (Exception e) {
-            throw new RuntimeException("流式问答请求失败: " + e.getMessage(), e);
+            throw new RuntimeException(errorPrefix + e.getMessage(), e);
+        }
+    }
+
+    private HttpURLConnection openPostConnection(String url, int readTimeout, String accept) throws Exception {
+        HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection(Proxy.NO_PROXY);
+        conn.setRequestMethod("POST");
+        conn.setRequestProperty("Content-Type", "application/json");
+        conn.setRequestProperty("Accept", accept);
+        conn.setConnectTimeout(10000);
+        conn.setReadTimeout(readTimeout);
+        conn.setDoOutput(true);
+        conn.connect();
+        return conn;
+    }
+
+    private void writeBody(HttpURLConnection conn, Object request) throws Exception {
+        byte[] json = objectMapper.writeValueAsBytes(request);
+        try (OutputStream os = conn.getOutputStream()) {
+            os.write(json);
+            os.flush();
         }
     }
 }

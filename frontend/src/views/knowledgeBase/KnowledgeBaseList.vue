@@ -1,7 +1,7 @@
 <template>
   <div>
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-      <h3 style="margin: 0;">知识库管理</h3>
+    <div class="page-header">
+      <h3 class="page-title">知识库管理</h3>
       <el-button type="primary" @click="openCreateDialog">创建知识库</el-button>
     </div>
 

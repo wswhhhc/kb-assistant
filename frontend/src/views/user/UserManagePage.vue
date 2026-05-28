@@ -1,7 +1,7 @@
 <template>
   <div>
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-      <h3 style="margin: 0;">用户管理</h3>
+    <div class="page-header">
+      <h3 class="page-title">用户管理</h3>
       <el-button type="primary" @click="showCreate = true">创建用户</el-button>
     </div>
 

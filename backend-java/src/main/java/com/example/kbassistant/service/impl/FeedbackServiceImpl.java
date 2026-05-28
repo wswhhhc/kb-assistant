@@ -5,10 +5,12 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.metadata.OrderItem;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.kbassistant.common.BusinessException;
+import com.example.kbassistant.constants.MessageRoles;
 import com.example.kbassistant.dto.request.FeedbackRequest;
 import com.example.kbassistant.entity.AnswerFeedback;
 import com.example.kbassistant.entity.ChatMessage;
 import com.example.kbassistant.entity.ChatSession;
+import com.example.kbassistant.enums.FailureType;
 import com.example.kbassistant.mapper.AnswerFeedbackMapper;
 import com.example.kbassistant.mapper.ChatSessionMapper;
 import com.example.kbassistant.service.ChatMessageService;
@@ -36,7 +38,7 @@ public class FeedbackServiceImpl implements FeedbackService {
     @Override
     public void submit(FeedbackRequest request, Long userId) {
         ChatMessage aiMessage = chatMessageService.getById(request.getMessageId());
-        if (aiMessage == null || !"AI".equals(aiMessage.getRole())) {
+        if (aiMessage == null || !MessageRoles.AI.equals(aiMessage.getRole())) {
             throw new BusinessException(400, "反馈消息不存在");
         }
 
@@ -121,22 +123,22 @@ public class FeedbackServiceImpl implements FeedbackService {
 
     private String resolveFailureType(String reasonType) {
         if (reasonType == null || reasonType.isBlank()) {
-            return "LOW_QUALITY";
+            return FailureType.LOW_QUALITY.name();
         }
 
         String normalized = reasonType.trim().toUpperCase();
-        if ("NO_HIT".equals(normalized)) {
-            return "NO_HIT";
+        if (FailureType.NO_HIT.name().equals(normalized)) {
+            return FailureType.NO_HIT.name();
         }
-        if ("INSUFFICIENT_CITATION".equals(normalized)) {
-            return "INSUFFICIENT_CITATION";
+        if (FailureType.INSUFFICIENT_CITATION.name().equals(normalized)) {
+            return FailureType.INSUFFICIENT_CITATION.name();
         }
-        if ("MODEL_ERROR".equals(normalized)) {
-            return "MODEL_ERROR";
+        if (FailureType.MODEL_ERROR.name().equals(normalized)) {
+            return FailureType.MODEL_ERROR.name();
         }
-        if ("LOW_QUALITY".equals(normalized)) {
-            return "LOW_QUALITY";
+        if (FailureType.LOW_QUALITY.name().equals(normalized)) {
+            return FailureType.LOW_QUALITY.name();
         }
-        return "LOW_QUALITY";
+        return FailureType.LOW_QUALITY.name();
     }
 }

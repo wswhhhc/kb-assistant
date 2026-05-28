@@ -5,9 +5,12 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.kbassistant.client.AiServiceClient;
 import com.example.kbassistant.common.BusinessException;
+import com.example.kbassistant.dto.response.DocumentDetailVO;
 import com.example.kbassistant.entity.Document;
 import com.example.kbassistant.entity.DocumentChunk;
 import com.example.kbassistant.entity.KnowledgeBase;
+import com.example.kbassistant.enums.DocumentStatus;
+import com.example.kbassistant.service.DocumentProcessingService;
 import com.example.kbassistant.mapper.DocumentChunkMapper;
 import com.example.kbassistant.mapper.DocumentMapper;
 import com.example.kbassistant.service.DocumentService;
@@ -36,6 +39,7 @@ public class DocumentServiceImpl implements DocumentService {
     private final DocumentChunkMapper documentChunkMapper;
     private final AiServiceClient aiServiceClient;
     private final KnowledgeBaseService knowledgeBaseService;
+    private final DocumentProcessingService documentProcessingService;
 
     @Value("${file.upload-dir}")
     private String uploadDir;
@@ -49,14 +53,7 @@ public class DocumentServiceImpl implements DocumentService {
         }
 
         String originalName = file.getOriginalFilename();
-        if (originalName == null || originalName.isEmpty()) {
-            throw new BusinessException("文件名不能为空");
-        }
-
-        String ext = originalName.substring(originalName.lastIndexOf(".") + 1).toUpperCase();
-        if (!isSupportedType(ext)) {
-            throw new BusinessException("不支持的文件类型: " + ext);
-        }
+        String ext = extractFileExtension(originalName);
 
         String uuidName = UUID.randomUUID() + "_" + originalName;
         String relativePath = knowledgeBaseId + "/" + uuidName;
@@ -76,20 +73,12 @@ public class DocumentServiceImpl implements DocumentService {
         doc.setFileType(ext);
         doc.setFilePath(relativePath);
         doc.setFileSize(file.getSize());
-        doc.setParseStatus("UPLOADED");
+        doc.setParseStatus(DocumentStatus.UPLOADED.name());
         doc.setCreatedBy(userId);
         documentMapper.insert(doc);
 
-        // 上传成功后自动触发文档处理
-        final Long docId = doc.getId();
-        new Thread(() -> {
-            try {
-                log.info("自动处理文档: {}", docId);
-                processDocument(docId, userId, isAdmin);
-            } catch (Exception e) {
-                log.warn("文档自动处理失败: {} - {}", docId, e.getMessage());
-            }
-        }).start();
+        // 上传成功后自动触发异步文档处理
+        documentProcessingService.processAsync(doc.getId(), userId, isAdmin);
 
         return doc;
     }
@@ -113,7 +102,7 @@ public class DocumentServiceImpl implements DocumentService {
     }
 
     @Override
-    public Map<String, Object> getDocumentDetail(Long documentId, Long userId, boolean isAdmin) {
+    public DocumentDetailVO getDocumentDetail(Long documentId, Long userId, boolean isAdmin) {
         Document doc = documentMapper.selectById(documentId);
         if (doc == null) {
             throw new BusinessException("文档不存在");
@@ -127,10 +116,7 @@ public class DocumentServiceImpl implements DocumentService {
                 .orderByAsc(DocumentChunk::getChunkIndex);
         var chunks = documentChunkMapper.selectList(chunkWrapper);
 
-        Map<String, Object> result = new HashMap<>();
-        result.put("document", doc);
-        result.put("chunks", chunks);
-        return result;
+        return new DocumentDetailVO(doc, chunks);
     }
 
     @Override
@@ -162,12 +148,12 @@ public class DocumentServiceImpl implements DocumentService {
             throw new BusinessException("无权限处理该文档");
         }
 
-        if (!"UPLOADED".equals(doc.getParseStatus()) && !"FAILED".equals(doc.getParseStatus())) {
+        if (!DocumentStatus.UPLOADED.name().equals(doc.getParseStatus()) && !DocumentStatus.FAILED.name().equals(doc.getParseStatus())) {
             throw new BusinessException("文档状态不允许处理: " + doc.getParseStatus());
         }
 
         // 失败重试时清空错误信息
-        if ("FAILED".equals(doc.getParseStatus())) {
+        if (DocumentStatus.FAILED.name().equals(doc.getParseStatus())) {
             doc.setErrorMessage(null);
             documentMapper.updateById(doc);
         }
@@ -182,14 +168,29 @@ public class DocumentServiceImpl implements DocumentService {
         try {
             return aiServiceClient.processDocument(request);
         } catch (Exception e) {
-            doc.setParseStatus("FAILED");
+            doc.setParseStatus(DocumentStatus.FAILED.name());
             doc.setErrorMessage("调用 AI 服务失败: " + e.getMessage());
             documentMapper.updateById(doc);
             throw new BusinessException("文档处理失败: " + e.getMessage());
         }
     }
 
-    private boolean isSupportedType(String ext) {
-        return "PDF".equals(ext) || "DOCX".equals(ext) || "MD".equals(ext) || "TXT".equals(ext);
+    private static final java.util.Set<String> SUPPORTED_TYPES = java.util.Set.of("PDF", "DOCX", "MD", "TXT");
+
+    private String extractFileExtension(String originalName) {
+        if (originalName == null || originalName.isEmpty()) {
+            throw new BusinessException("文件名不能为空");
+        }
+
+        int dotIndex = originalName.lastIndexOf(".");
+        if (dotIndex <= 0) {
+            throw new BusinessException("文件缺少扩展名，仅支持 PDF/DOCX/MD/TXT 格式");
+        }
+
+        String ext = originalName.substring(dotIndex + 1).toUpperCase();
+        if (!SUPPORTED_TYPES.contains(ext)) {
+            throw new BusinessException("不支持的文件类型: " + ext + "，仅支持 PDF/DOCX/MD/TXT 格式");
+        }
+        return ext;
     }
 }

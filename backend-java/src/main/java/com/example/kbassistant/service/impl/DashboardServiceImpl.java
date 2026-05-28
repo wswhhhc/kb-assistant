@@ -1,8 +1,10 @@
 package com.example.kbassistant.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.kbassistant.constants.MessageRoles;
 import com.example.kbassistant.dto.response.DashboardStatsResponse;
 import com.example.kbassistant.entity.*;
+import com.example.kbassistant.enums.DocumentStatus;
 import com.example.kbassistant.mapper.*;
 import com.example.kbassistant.service.DashboardService;
 import lombok.RequiredArgsConstructor;
@@ -35,12 +37,12 @@ public class DashboardServiceImpl implements DashboardService {
         stats.setKnowledgeBaseCount(kbMapper.selectCount(null));
 
         LambdaQueryWrapper<Document> docWrapper = new LambdaQueryWrapper<>();
-        docWrapper.eq(Document::getParseStatus, "READY");
+        docWrapper.eq(Document::getParseStatus, DocumentStatus.READY.name());
         stats.setReadyDocumentCount(documentMapper.selectCount(docWrapper));
         stats.setDocumentCount(documentMapper.selectCount(null));
 
         LambdaQueryWrapper<ChatMessage> msgWrapper = new LambdaQueryWrapper<>();
-        msgWrapper.eq(ChatMessage::getRole, "USER");
+        msgWrapper.eq(ChatMessage::getRole, MessageRoles.USER);
         stats.setChatCount(messageMapper.selectCount(msgWrapper));
 
         stats.setFeedbackCount(feedbackMapper.selectCount(null));
@@ -64,7 +66,7 @@ public class DashboardServiceImpl implements DashboardService {
 
         LambdaQueryWrapper<Document> myReadyDocWrapper = new LambdaQueryWrapper<>();
         myReadyDocWrapper.eq(Document::getCreatedBy, userId)
-                .eq(Document::getParseStatus, "READY");
+                .eq(Document::getParseStatus, DocumentStatus.READY.name());
         stats.setReadyDocumentCount(documentMapper.selectCount(myReadyDocWrapper));
 
         LambdaQueryWrapper<ChatSession> mySessionWrapper = new LambdaQueryWrapper<>();
@@ -77,7 +79,7 @@ public class DashboardServiceImpl implements DashboardService {
         } else {
             var sessionIds = sessions.stream().map(ChatSession::getId).toList();
             LambdaQueryWrapper<ChatMessage> myMsgWrapper = new LambdaQueryWrapper<>();
-            myMsgWrapper.eq(ChatMessage::getRole, "USER")
+            myMsgWrapper.eq(ChatMessage::getRole, MessageRoles.USER)
                     .in(ChatMessage::getSessionId, sessionIds);
             stats.setChatCount(messageMapper.selectCount(myMsgWrapper));
         }

@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.kbassistant.dto.response.FailedQuestionStatsVO;
 import com.example.kbassistant.dto.response.FailedQuestionVO;
 import com.example.kbassistant.entity.FailedQuestion;
+import com.example.kbassistant.enums.FailureType;
 import com.example.kbassistant.mapper.FailedQuestionMapper;
 import com.example.kbassistant.service.FailedQuestionService;
 import lombok.RequiredArgsConstructor;
@@ -49,10 +50,10 @@ public class FailedQuestionServiceImpl implements FailedQuestionService {
     public FailedQuestionStatsVO getStats() {
         FailedQuestionStatsVO stats = new FailedQuestionStatsVO();
         stats.setTotalCount(failedQuestionMapper.countTotal());
-        stats.setNoHitCount(failedQuestionMapper.countByType("NO_HIT"));
-        stats.setLowQualityCount(failedQuestionMapper.countByType("LOW_QUALITY"));
-        stats.setModelErrorCount(failedQuestionMapper.countByType("MODEL_ERROR"));
-        stats.setInsufficientCitationCount(failedQuestionMapper.countByType("INSUFFICIENT_CITATION"));
+        stats.setNoHitCount(failedQuestionMapper.countByType(FailureType.NO_HIT.name()));
+        stats.setLowQualityCount(failedQuestionMapper.countByType(FailureType.LOW_QUALITY.name()));
+        stats.setModelErrorCount(failedQuestionMapper.countByType(FailureType.MODEL_ERROR.name()));
+        stats.setInsufficientCitationCount(failedQuestionMapper.countByType(FailureType.INSUFFICIENT_CITATION.name()));
         stats.setPendingCount(failedQuestionMapper.countPending());
         return stats;
     }

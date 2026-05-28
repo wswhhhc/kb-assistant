@@ -19,7 +19,7 @@ public class DocumentController {
     public Result<?> upload(@PathVariable Long kbId,
                             @RequestParam("file") MultipartFile file,
                             @AuthenticationPrincipal JwtUserDetails userDetails) {
-        boolean isAdmin = "ADMIN".equals(userDetails.getRole());
+        boolean isAdmin = userDetails.isAdmin();
         return Result.success(documentService.upload(kbId, file, userDetails.getUserId(), isAdmin));
     }
 
@@ -28,21 +28,21 @@ public class DocumentController {
                           @RequestParam(defaultValue = "1") int pageNum,
                           @RequestParam(defaultValue = "10") int pageSize,
                           @AuthenticationPrincipal JwtUserDetails userDetails) {
-        boolean isAdmin = "ADMIN".equals(userDetails.getRole());
+        boolean isAdmin = userDetails.isAdmin();
         return Result.success(documentService.pageByKnowledgeBaseId(kbId, pageNum, pageSize, userDetails.getUserId(), isAdmin));
     }
 
     @GetMapping("/documents/{id}")
     public Result<?> detail(@PathVariable Long id,
                             @AuthenticationPrincipal JwtUserDetails userDetails) {
-        boolean isAdmin = "ADMIN".equals(userDetails.getRole());
+        boolean isAdmin = userDetails.isAdmin();
         return Result.success(documentService.getDocumentDetail(id, userDetails.getUserId(), isAdmin));
     }
 
     @DeleteMapping("/documents/{id}")
     public Result<Void> delete(@PathVariable Long id,
                                @AuthenticationPrincipal JwtUserDetails userDetails) {
-        boolean isAdmin = "ADMIN".equals(userDetails.getRole());
+        boolean isAdmin = userDetails.isAdmin();
         documentService.delete(id, userDetails.getUserId(), isAdmin);
         return Result.success();
     }
@@ -50,7 +50,7 @@ public class DocumentController {
     @PostMapping("/documents/{id}/process")
     public Result<?> process(@PathVariable Long id,
                              @AuthenticationPrincipal JwtUserDetails userDetails) {
-        boolean isAdmin = "ADMIN".equals(userDetails.getRole());
+        boolean isAdmin = userDetails.isAdmin();
         return Result.success(documentService.processDocument(id, userDetails.getUserId(), isAdmin));
     }
 }

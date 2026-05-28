@@ -23,3 +23,5 @@ export function createSession(params) {
 export function deleteSession(id) {
   return request.delete(`/chat/sessions/${id}`)
 }
+
+export { streamRequest } from '@/utils/streamRequest'

@@ -4,7 +4,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.kbassistant.common.BusinessException;
+import com.example.kbassistant.constants.UserRoles;
 import com.example.kbassistant.dto.request.UserCreateRequest;
+import com.example.kbassistant.dto.response.UserInfoResponse;
 import com.example.kbassistant.entity.SysUser;
 import com.example.kbassistant.mapper.SysUserMapper;
 import com.example.kbassistant.service.UserService;
@@ -49,7 +51,7 @@ public class UserServiceImpl implements UserService {
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         user.setRealName(request.getRealName());
         user.setEmail(request.getEmail());
-        user.setRole(request.getRole() != null ? request.getRole() : "USER");
+        user.setRole(request.getRole() != null ? request.getRole() : UserRoles.USER);
         user.setStatus("ACTIVE");
         userMapper.insert(user);
     }
@@ -62,6 +64,19 @@ public class UserServiceImpl implements UserService {
         }
         user.setStatus(status);
         userMapper.updateById(user);
+    }
+
+    @Override
+    public UserInfoResponse getUserInfo(Long userId) {
+        SysUser user = userMapper.selectById(userId);
+        UserInfoResponse resp = new UserInfoResponse();
+        resp.setId(user.getId());
+        resp.setUsername(user.getUsername());
+        resp.setRealName(user.getRealName());
+        resp.setEmail(user.getEmail());
+        resp.setRole(user.getRole());
+        resp.setStatus(user.getStatus());
+        return resp;
     }
 
     @Override

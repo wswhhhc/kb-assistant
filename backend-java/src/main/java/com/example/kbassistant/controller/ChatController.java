@@ -3,15 +3,15 @@ package com.example.kbassistant.controller;
 import com.example.kbassistant.client.AiServiceClient;
 import com.example.kbassistant.common.Result;
 import com.example.kbassistant.dto.request.ChatAskRequest;
-import com.example.kbassistant.entity.ChatMessage;
-import com.example.kbassistant.entity.ChatSession;
+import com.example.kbassistant.dto.response.ChatAskContext;
 import com.example.kbassistant.security.JwtUserDetails;
+import com.example.kbassistant.service.ChatAskService;
 import com.example.kbassistant.service.ChatMessageService;
 import com.example.kbassistant.service.ChatSessionService;
-import com.example.kbassistant.service.FailedQuestionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -20,10 +20,7 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 import org.springframework.web.bind.annotation.*;
 
 import java.io.BufferedReader;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.ArrayList;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -32,19 +29,19 @@ import java.nio.charset.StandardCharsets;
 @RestController
 @RequestMapping("/api/chat")
 @RequiredArgsConstructor
+@Slf4j
 public class ChatController {
 
     private final ChatSessionService sessionService;
     private final ChatMessageService messageService;
+    private final ChatAskService chatAskService;
     private final AiServiceClient aiServiceClient;
     private final ObjectMapper objectMapper;
-    private final FailedQuestionService failedQuestionService;
 
     @PostMapping("/sessions")
     public Result<?> createSession(@RequestParam Long knowledgeBaseId,
                                    @AuthenticationPrincipal JwtUserDetails userDetails) {
-        boolean isAdmin = "ADMIN".equals(userDetails.getRole());
-        return Result.success(sessionService.create(userDetails.getUserId(), knowledgeBaseId, isAdmin));
+        return Result.success(sessionService.create(userDetails.getUserId(), knowledgeBaseId, userDetails.isAdmin()));
     }
 
     @GetMapping("/sessions")
@@ -77,45 +74,16 @@ public class ChatController {
     public Result<?> ask(@Valid @RequestBody ChatAskRequest request,
                          @AuthenticationPrincipal JwtUserDetails userDetails) {
         Long userId = userDetails.getUserId();
-        boolean isAdmin = "ADMIN".equals(userDetails.getRole());
+        ChatAskContext ctx = chatAskService.prepareContext(
+                userId, request.getKnowledgeBaseId(), request.getSessionId(),
+                request.getQuestion(), userDetails.isAdmin());
 
-        Long sessionId = request.getSessionId();
-        if (sessionId == null) {
-            ChatSession session = sessionService.create(userId, request.getKnowledgeBaseId(), isAdmin);
-            sessionId = session.getId();
-        }
-        final Long finalSessionId = sessionId;
-
-        // 加载历史消息（多轮上下文，按时间正序）
-        List<ChatMessage> recentMessages = messageService.findRecentBySessionId(finalSessionId, 50);
-        List<Map<String, String>> history = new ArrayList<>();
-        for (int i = recentMessages.size() - 1; i >= 0; i--) {
-            ChatMessage msg = recentMessages.get(i);
-            Map<String, String> entry = new HashMap<>();
-            entry.put("role", "AI".equals(msg.getRole()) ? "AI" : "USER");
-            entry.put("content", msg.getContent());
-            history.add(entry);
-        }
-
-        ChatMessage userMsg = new ChatMessage();
-        userMsg.setSessionId(finalSessionId);
-        userMsg.setRole("USER");
-        userMsg.setContent(request.getQuestion());
-        messageService.save(userMsg);
-        sessionService.updateTitleIfDefault(finalSessionId, request.getQuestion());
-
-        Map<String, Object> aiRequest = new HashMap<>();
-        aiRequest.put("userId", userId);
-        aiRequest.put("knowledgeBaseId", request.getKnowledgeBaseId());
-        aiRequest.put("sessionId", finalSessionId);
-        aiRequest.put("question", request.getQuestion());
-        aiRequest.put("history", history);
-
+        Map<String, Object> aiRequest = buildAiRequest(userId, request, ctx);
         Map aiResponse = aiServiceClient.askQuestion(aiRequest);
 
         String answer = "";
         boolean success = false;
-        List<Map<String, Object>> citations = new java.util.ArrayList<>();
+        List<Map<String, Object>> citations = new ArrayList<>();
         int retrievalCount = 0;
         String modelName = "";
 
@@ -131,36 +99,19 @@ public class ChatController {
             modelName = (String) aiResponse.getOrDefault("modelName", "");
         }
 
-        ChatMessage aiMsg = new ChatMessage();
-        aiMsg.setSessionId(sessionId);
-        aiMsg.setRole("AI");
-        aiMsg.setContent(answer);
-        aiMsg.setModelName(modelName);
-        aiMsg.setRetrievalCount(retrievalCount);
-        try {
-            aiMsg.setCitationJson(objectMapper.writeValueAsString(citations));
-        } catch (Exception e) {
-            aiMsg.setCitationJson("[]");
-        }
-        messageService.save(aiMsg);
+        chatAskService.saveAiMessage(ctx.getSessionId(), answer, citations, retrievalCount, modelName);
 
         Map<String, Object> result = new HashMap<>();
-        result.put("sessionId", sessionId);
+        result.put("sessionId", ctx.getSessionId());
         result.put("answer", answer);
         result.put("citations", citations);
         result.put("retrievalCount", retrievalCount);
         result.put("modelName", modelName);
         result.put("success", success);
 
-        recordFailedQuestionIfNeeded(
-                userId,
-                request.getKnowledgeBaseId(),
-                finalSessionId,
-                request.getQuestion(),
-                retrievalCount,
-                success,
-                answer
-        );
+        chatAskService.recordFailedQuestion(
+                userId, request.getKnowledgeBaseId(), ctx.getSessionId(),
+                request.getQuestion(), retrievalCount, success, answer);
 
         return Result.success(result);
     }
@@ -169,39 +120,11 @@ public class ChatController {
     public ResponseEntity<StreamingResponseBody> askStream(@Valid @RequestBody ChatAskRequest request,
                                                            @AuthenticationPrincipal JwtUserDetails userDetails) {
         Long userId = userDetails.getUserId();
-        boolean isAdmin = "ADMIN".equals(userDetails.getRole());
+        ChatAskContext ctx = chatAskService.prepareContext(
+                userId, request.getKnowledgeBaseId(), request.getSessionId(),
+                request.getQuestion(), userDetails.isAdmin());
 
-        Long sessionId = request.getSessionId();
-        if (sessionId == null) {
-            ChatSession session = sessionService.create(userId, request.getKnowledgeBaseId(), isAdmin);
-            sessionId = session.getId();
-        }
-        final Long finalSessionId = sessionId;
-
-        // 加载历史消息（多轮上下文，按时间正序）
-        List<ChatMessage> recentMessages = messageService.findRecentBySessionId(finalSessionId, 50);
-        List<Map<String, String>> history = new ArrayList<>();
-        for (int i = recentMessages.size() - 1; i >= 0; i--) {
-            ChatMessage msg = recentMessages.get(i);
-            Map<String, String> entry = new HashMap<>();
-            entry.put("role", "AI".equals(msg.getRole()) ? "AI" : "USER");
-            entry.put("content", msg.getContent());
-            history.add(entry);
-        }
-
-        ChatMessage userMsg = new ChatMessage();
-        userMsg.setSessionId(finalSessionId);
-        userMsg.setRole("USER");
-        userMsg.setContent(request.getQuestion());
-        messageService.save(userMsg);
-        sessionService.updateTitleIfDefault(finalSessionId, request.getQuestion());
-
-        Map<String, Object> aiRequest = new HashMap<>();
-        aiRequest.put("userId", userId);
-        aiRequest.put("knowledgeBaseId", request.getKnowledgeBaseId());
-        aiRequest.put("sessionId", finalSessionId);
-        aiRequest.put("question", request.getQuestion());
-        aiRequest.put("history", history);
+        Map<String, Object> aiRequest = buildAiRequest(userId, request, ctx);
 
         StringBuilder answerBuilder = new StringBuilder();
         List<Map<String, Object>> citations = new ArrayList<>();
@@ -255,16 +178,10 @@ public class ChatController {
                 outputStream.write(errorEvent.getBytes(StandardCharsets.UTF_8));
                 outputStream.flush();
             } finally {
-                saveAiMessage(finalSessionId, answerBuilder.toString(), citations, retrievalCount.get(), modelName.get());
-                recordFailedQuestionIfNeeded(
-                        userId,
-                        request.getKnowledgeBaseId(),
-                        finalSessionId,
-                        request.getQuestion(),
-                        retrievalCount.get(),
-                        success.get(),
-                        answerBuilder.toString()
-                );
+                chatAskService.saveAiMessage(ctx.getSessionId(), answerBuilder.toString(), citations, retrievalCount.get(), modelName.get());
+                chatAskService.recordFailedQuestion(
+                        userId, request.getKnowledgeBaseId(), ctx.getSessionId(),
+                        request.getQuestion(), retrievalCount.get(), success.get(), answerBuilder.toString());
             }
         };
 
@@ -273,6 +190,16 @@ public class ChatController {
                 .header(HttpHeaders.CONNECTION, "keep-alive")
                 .contentType(MediaType.TEXT_EVENT_STREAM)
                 .body(stream);
+    }
+
+    private Map<String, Object> buildAiRequest(Long userId, ChatAskRequest request, ChatAskContext ctx) {
+        Map<String, Object> aiRequest = new HashMap<>();
+        aiRequest.put("userId", userId);
+        aiRequest.put("knowledgeBaseId", request.getKnowledgeBaseId());
+        aiRequest.put("sessionId", ctx.getSessionId());
+        aiRequest.put("question", request.getQuestion());
+        aiRequest.put("history", ctx.getHistory());
+        return aiRequest;
     }
 
     private void handleSseEvent(String eventName,
@@ -329,61 +256,8 @@ public class ChatController {
                     success.set(bool);
                 }
             }
-        } catch (Exception ignored) {
-        }
-    }
-
-    private void saveAiMessage(Long sessionId,
-                               String answer,
-                               List<Map<String, Object>> citations,
-                               int retrievalCount,
-                               String modelName) {
-        ChatMessage aiMsg = new ChatMessage();
-        aiMsg.setSessionId(sessionId);
-        aiMsg.setRole("AI");
-        aiMsg.setContent(answer);
-        aiMsg.setModelName(modelName);
-        aiMsg.setRetrievalCount(retrievalCount);
-        try {
-            aiMsg.setCitationJson(objectMapper.writeValueAsString(citations));
         } catch (Exception e) {
-            aiMsg.setCitationJson("[]");
-        }
-        messageService.save(aiMsg);
-    }
-
-    private void recordFailedQuestionIfNeeded(Long userId,
-                                              Long knowledgeBaseId,
-                                              Long sessionId,
-                                              String question,
-                                              int retrievalCount,
-                                              boolean success,
-                                              String answer) {
-        if (question == null || question.isBlank()) {
-            return;
-        }
-
-        if (retrievalCount == 0) {
-            failedQuestionService.record(
-                    userId,
-                    knowledgeBaseId,
-                    sessionId,
-                    question,
-                    "NO_HIT",
-                    answer
-            );
-            return;
-        }
-
-        if (!success) {
-            failedQuestionService.record(
-                    userId,
-                    knowledgeBaseId,
-                    sessionId,
-                    question,
-                    "MODEL_ERROR",
-                    answer
-            );
+            log.warn("SSE 事件解析失败: event={}, data={}", eventName, data, e);
         }
     }
 }

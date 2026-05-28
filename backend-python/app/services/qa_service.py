@@ -7,15 +7,17 @@ from app.services.retriever import Retriever
 from app.services.reranker import Reranker
 from app.services.qa_generator import QAGenerator
 from app.services.citation import CitationBuilder
+from app.services.siliconflow_client import SiliconFlowClient
 
 
 class QAService:
 
-    def __init__(self):
-        self.embedder = Embedder()
+    def __init__(self, client: Optional[SiliconFlowClient] = None):
+        self.client = client or SiliconFlowClient()
+        self.embedder = Embedder(self.client)
         self.retriever = Retriever()
-        self.reranker = Reranker()
-        self.generator = QAGenerator()
+        self.reranker = Reranker(self.client)
+        self.generator = QAGenerator(self.client)
         self.citation_builder = CitationBuilder()
 
     @staticmethod
@@ -43,7 +45,6 @@ class QAService:
 
     @staticmethod
     def _keyword_overlap_score(question: str, content: str) -> float:
-        """基于 TF 的通用关键词重叠评分"""
         question_words = set(token for token in question if len(token) > 1)
         if not question_words:
             return 0.0
@@ -81,7 +82,6 @@ class QAService:
         query_variants = self._build_query_variants(question)
         retrieved_groups = []
 
-        # 向量检索（现有逻辑）
         for query in query_variants:
             vector = await self.embedder.embed(query)
             if not vector:
@@ -115,7 +115,6 @@ class QAService:
                 "success": True
             }
 
-        # Rerank 精排
         if settings.ENABLE_RERANK and len(chunks) > 1:
             chunks = await self.reranker.rerank(question, chunks)
 
@@ -130,48 +129,83 @@ class QAService:
             "success": True
         }
 
+    async def prepare_answer(self, question: str, knowledge_base_id: int,
+                             history: Optional[list[dict]] = None) -> dict:
+        """准备问答上下文：查询改写 → 检索 → prompt 构建
+
+        返回：
+            success: bool
+            retrieval_question: str  — 改写后的问题（用于检索）
+            answer: str              — 检索失败时的错误信息
+            chunks: list             — 检索到的片段
+            contexts: list[str]      — 片段内容列表
+            citations: list          — 引用列表
+            retrievalCount: int
+            modelName: str
+            prompt: str              — 构建好的 Prompt（仅在 success=True 且 chunks 非空时有值）
+        """
+        history = history or []
+
+        # 查询改写
+        retrieval_question = question
+        if history:
+            rewritten = await self.generator.rewrite_query(question, history)
+            if rewritten and rewritten != question:
+                retrieval_question = rewritten
+
+        # 检索
+        retrieval_result = await self.retrieve_context(retrieval_question, knowledge_base_id)
+        retrieval_question = retrieval_question or question
+
+        result = {
+            "success": retrieval_result["success"],
+            "retrieval_question": retrieval_question,
+            "answer": retrieval_result["answer"],
+            "chunks": retrieval_result["chunks"],
+            "citations": retrieval_result["citations"],
+            "retrievalCount": retrieval_result["retrievalCount"],
+            "modelName": retrieval_result["modelName"],
+            "prompt": None,
+            "contexts": [],
+        }
+
+        if not retrieval_result["success"] or not retrieval_result["chunks"]:
+            return result
+
+        contexts = [c.content for c in retrieval_result["chunks"]]
+        result["contexts"] = contexts
+        result["prompt"] = self.generator.build_context_prompt(question, contexts, history)
+
+        return result
+
     async def ask(self, question: str, knowledge_base_id: int,
                   session_id: Optional[int] = None,
                   history: Optional[list[dict]] = None) -> dict:
-        history = history or []
+        prepared = await self.prepare_answer(question, knowledge_base_id, history)
 
-        # 查询改写：对省略式追问补充上下文
-        if history:
-            rewritten = await self.generator.rewrite_query(question, history)
-            retrieval_question = rewritten if rewritten and rewritten != question else question
-        else:
-            retrieval_question = question
-
-        # 用改写后的问题进行检索
-        retrieval_result = await self.retrieve_context(retrieval_question, knowledge_base_id)
-        if not retrieval_result["success"] or not retrieval_result["chunks"]:
+        if not prepared["success"] or not prepared["prompt"]:
             return {
-                "answer": retrieval_result["answer"],
-                "citations": retrieval_result["citations"],
-                "retrievalCount": retrieval_result["retrievalCount"],
-                "modelName": retrieval_result["modelName"],
-                "success": retrieval_result["success"]
+                "answer": prepared["answer"] or "抱歉，无法生成回答。",
+                "citations": prepared["citations"],
+                "retrievalCount": prepared["retrievalCount"],
+                "modelName": prepared["modelName"],
+                "success": prepared["success"] if prepared["success"] else False,
             }
 
-        contexts = [c.content for c in retrieval_result["chunks"]]
-
-        # 使用带历史上下文的 prompt
-        prompt = self.generator.build_context_prompt(question, contexts, history)
-
-        answer = await self.generator.generate(prompt)
+        answer = await self.generator.generate(prepared["prompt"])
         if not answer:
             return {
                 "answer": "抱歉，答案生成失败，请稍后重试。",
-                "citations": retrieval_result["citations"],
-                "retrievalCount": retrieval_result["retrievalCount"],
+                "citations": prepared["citations"],
+                "retrievalCount": prepared["retrievalCount"],
                 "modelName": settings.CHAT_MODEL,
-                "success": False
+                "success": False,
             }
 
         return {
             "answer": answer,
-            "citations": retrieval_result["citations"],
-            "retrievalCount": retrieval_result["retrievalCount"],
+            "citations": prepared["citations"],
+            "retrievalCount": prepared["retrievalCount"],
             "modelName": settings.CHAT_MODEL,
-            "success": True
+            "success": True,
         }

@@ -51,7 +51,7 @@ const searchText = ref('')
 const filteredSessions = computed(() => {
   if (!searchText.value) return sessions.value
   const keyword = searchText.value.toLowerCase()
-  return sessions.value.filter(s => s.title.toLowerCase().includes(keyword))
+  return sessions.value.filter(s => (s.title || '').toLowerCase().includes(keyword))
 })
 
 function formatTime(t) {

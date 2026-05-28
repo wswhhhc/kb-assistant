@@ -1,8 +1,8 @@
 package com.example.kbassistant.service.impl;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.example.kbassistant.dto.response.ChatSessionListItemVO;
 import com.example.kbassistant.entity.ChatSession;
 import com.example.kbassistant.mapper.ChatSessionMapper;
 import com.example.kbassistant.service.ChatMessageService;
@@ -41,14 +41,8 @@ public class ChatSessionServiceImpl implements ChatSessionService {
     }
 
     @Override
-    public IPage<ChatSession> pageByUserId(Long userId, Long knowledgeBaseId, int pageNum, int pageSize) {
-        LambdaQueryWrapper<ChatSession> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(ChatSession::getUserId, userId);
-        if (knowledgeBaseId != null) {
-            wrapper.eq(ChatSession::getKnowledgeBaseId, knowledgeBaseId);
-        }
-        wrapper.orderByDesc(ChatSession::getUpdatedAt);
-        return sessionMapper.selectPage(new Page<>(pageNum, pageSize), wrapper);
+    public IPage<ChatSessionListItemVO> pageByUserId(Long userId, Long knowledgeBaseId, int pageNum, int pageSize) {
+        return sessionMapper.selectSessionListPage(new Page<>(pageNum, pageSize), userId, knowledgeBaseId);
     }
 
     @Override

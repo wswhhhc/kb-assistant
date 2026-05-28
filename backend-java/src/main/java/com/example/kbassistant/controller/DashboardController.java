@@ -18,7 +18,7 @@ public class DashboardController {
 
     @GetMapping("/statistics")
     public Result<?> statistics(@AuthenticationPrincipal JwtUserDetails userDetails) {
-        boolean isAdmin = userDetails != null && "ADMIN".equalsIgnoreCase(userDetails.getRole());
+        boolean isAdmin = userDetails != null && userDetails.isAdmin();
         Long userId = userDetails != null ? userDetails.getUserId() : null;
         return Result.success(dashboardService.getStatistics(userId, isAdmin));
     }

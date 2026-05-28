@@ -1,7 +1,7 @@
 <template>
   <div>
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-      <h3 style="margin: 0;">失败问题分析</h3>
+    <div class="page-header">
+      <h3 class="page-title">失败问题分析</h3>
     </div>
 
     <!-- 统计卡片 -->
@@ -238,14 +238,18 @@ async function fetchStats() {
         { label: '待处理', value: data.pendingCount ?? 0, color: '#f56c6c' }
       ]
     }
-  } catch {}
+  } catch {
+    console.warn('获取失败问题统计失败')
+  }
 }
 
 async function fetchKbList() {
   try {
     const res = await listKnowledgeBases({ pageNum: 1, pageSize: 100 })
     kbList.value = res.data.records || []
-  } catch {}
+  } catch {
+    console.warn('获取知识库列表失败')
+  }
 }
 
 async function fetchList() {

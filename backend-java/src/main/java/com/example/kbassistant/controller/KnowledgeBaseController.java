@@ -20,21 +20,21 @@ public class KnowledgeBaseController {
     public Result<?> list(@RequestParam(defaultValue = "1") int pageNum,
                           @RequestParam(defaultValue = "10") int pageSize,
                           @AuthenticationPrincipal JwtUserDetails userDetails) {
-        boolean isAdmin = "ADMIN".equals(userDetails.getRole());
+        boolean isAdmin = userDetails.isAdmin();
         return Result.success(knowledgeBaseService.page(pageNum, pageSize, userDetails.getUserId(), isAdmin));
     }
 
     @GetMapping("/{id}")
     public Result<?> get(@PathVariable Long id,
                          @AuthenticationPrincipal JwtUserDetails userDetails) {
-        boolean isAdmin = "ADMIN".equals(userDetails.getRole());
+        boolean isAdmin = userDetails.isAdmin();
         return Result.success(knowledgeBaseService.getById(id, userDetails.getUserId(), isAdmin));
     }
 
     @PostMapping
     public Result<?> create(@Valid @RequestBody KnowledgeBaseCreateRequest request,
                             @AuthenticationPrincipal JwtUserDetails userDetails) {
-        boolean isAdmin = "ADMIN".equals(userDetails.getRole());
+        boolean isAdmin = userDetails.isAdmin();
         return Result.success(knowledgeBaseService.create(request, userDetails.getUserId(), isAdmin));
     }
 
@@ -42,7 +42,7 @@ public class KnowledgeBaseController {
     public Result<Void> update(@PathVariable Long id,
                                @Valid @RequestBody KnowledgeBaseCreateRequest request,
                                @AuthenticationPrincipal JwtUserDetails userDetails) {
-        boolean isAdmin = "ADMIN".equals(userDetails.getRole());
+        boolean isAdmin = userDetails.isAdmin();
         knowledgeBaseService.update(id, request, userDetails.getUserId(), isAdmin);
         return Result.success();
     }
@@ -50,7 +50,7 @@ public class KnowledgeBaseController {
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id,
                                @AuthenticationPrincipal JwtUserDetails userDetails) {
-        boolean isAdmin = "ADMIN".equals(userDetails.getRole());
+        boolean isAdmin = userDetails.isAdmin();
         knowledgeBaseService.delete(id, userDetails.getUserId(), isAdmin);
         return Result.success();
     }
